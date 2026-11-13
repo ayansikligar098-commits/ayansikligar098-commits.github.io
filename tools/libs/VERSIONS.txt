@@ -1,0 +1,43 @@
+Bundled libraries (all LOCAL files — no CDN anywhere, per project rule):
+
+pdf-lib.min.js
+  = @cantoo/pdf-lib 2.11.1, UMD build (dist/pdf-lib.min.js from the npm tarball)
+  A maintained fork of pdf-lib with the same PDFLib global/API, PLUS real
+  encryption support (doc.encrypt() — AES-256) and decryption on load
+  ({ password } option). Upstream pdf-lib 1.17.1 cannot encrypt at all,
+  which is why the fork build is bundled instead. Verified in tests.
+
+pdf.min.js + pdf.worker.min.js
+  = pdfjs-dist 3.11.174, legacy build (legacy/build/) from unpkg.
+  Worker is referenced relatively: pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'libs/pdf.worker.min.js'.
+
+jsQR.js
+  = jsQR 1.4.0, dist/jsQR.js from unpkg (Apache-2.0). Single-file QR decoder,
+  global `jsQR`. Used by scanner.html for the QR Scanner (photo + live
+  camera). Loads in Node too, which is how the tests exercise it.
+
+ocr/ (used by scanner.html "To Text (OCR)" — all LOCAL, zero network)
+  tesseract.min.js + worker.min.js
+    = tesseract.js 5.1.1, dist/ builds from unpkg (Apache-2.0).
+  tesseract-core-simd-lstm.wasm.js/.wasm + tesseract-core-lstm.wasm.js/.wasm
+    = tesseract.js-core 5.1.0 from unpkg. These are the only two core files
+    the 5.1.1 worker requests when the OEM is LSTM-only ("1"), which is how
+    the page always runs it (verified in the worker source).
+  eng.traineddata.gz
+    = @tesseract.js-data/eng 1.0.0 (4.0.0_best_int English data), loaded
+    with cacheMethod 'none' + gzip from the local folder — the engine never
+    downloads anything. Verified reading real text in Node tests.
+  Total ocr/ folder: ~16 MB. That is the honest price of offline OCR; it is
+  staging weight to keep in mind when this chunk merges into the APK.
+
+JsBarcode.min.js
+  = JsBarcode 3.12.1, dist/JsBarcode.all.min.js from jsdelivr (MIT,
+  (c) Johan Lindell). Renders CODE128 / EAN-13 / CODE39 / UPC-A onto a
+  canvas for the Barcode tool on index.html. Bundled once, offline after.
+
+zxing.min.js
+  = @zxing/library 0.21.3, umd/index.min.js from jsdelivr (Apache-2.0).
+  Global `ZXing` (BrowserMultiFormatReader). Used by scanner.html ONLY as
+  a fallback decoder for photo uploads (1D barcodes jsQR cannot read);
+  the live camera prefers the platform BarcodeDetector when present.

@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Premium — Link To QR</title>
+<link rel="stylesheet" href="/css/site.css">
+<!-- TODO(AdSense): After the owner's Google AdSense account is approved,
+     paste the AdSense script here with HIS publisher ID (ca-pub-XXXX…) and
+     remove this comment. No ID exists yet — do not invent one.
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
+-->
+</head>
+<body class="site">
+<div id="siteHeader"></div>
+
+<div class="wrap">
+  <h1 style="font-size:24px;margin:10px 0 2px">Link To QR Premium</h1>
+  <p class="muted" style="margin:0">No ads in the app experience, HD downloads, High-Quality scans and no monthly free limit. One Premium works in the app <b>and</b> on this website.</p>
+
+  <!-- signed-out state -->
+  <div class="card hidden" id="signedOutCard">
+    <h2>Login first</h2>
+    <p class="muted">Premium is attached to your account, so please login (or create an account) before buying.</p>
+    <a class="btn big" href="/login.html">Go to Login</a>
+  </div>
+
+  <!-- verification gate -->
+  <div class="card verify-box hidden" id="gateCard">
+    <h2>📧 Verify your email first</h2>
+    <p class="muted">Your email is not verified yet. Tap the verification link we emailed you, then press the button below. Premium can only be bought from a verified account — same rule as the app.</p>
+    <div class="rowflex">
+      <button class="btn" id="gateRecheck" type="button">I have verified — check now</button>
+      <button class="btn ghost" id="gateResend" type="button">Resend verification email</button>
+    </div>
+    <div class="msg" id="gateMsg"></div>
+  </div>
+
+  <!-- banned state -->
+  <div class="card hidden" id="bannedCard" style="border-color:var(--danger)">
+    <h2>Account suspended</h2>
+    <p class="muted">This account has been suspended by the admin. If you think this is a mistake, please contact the app owner.</p>
+  </div>
+
+  <!-- main purchase card -->
+  <div class="card hidden" id="buyCard">
+    <h2 id="statusTitle">Choose a plan</h2>
+    <p class="muted" id="statusLine"></p>
+
+    <div class="plans" id="plans"></div>
+
+    <h3>Have a coupon?</h3>
+    <div class="rowflex">
+      <input type="text" id="couponInput" placeholder="Coupon code" style="text-transform:uppercase">
+      <button class="btn ghost" id="applyCouponBtn" type="button" style="flex:0 0 auto">Apply Coupon</button>
+    </div>
+    <div class="msg" id="couponMsg"></div>
+    <div class="msg" id="couponNote" style="display:none"></div>
+
+    <p style="font-size:16px;margin:16px 0 4px">Total to pay: <b id="finalPrice">₹—</b> <s id="strikePrice" class="muted" style="font-size:13px"></s></p>
+
+    <div id="paySection">
+      <h3>Step 1 — Pay with any UPI app</h3>
+      <div class="upi-box"><span>Pay to UPI ID:<br><b id="upiIdText">…</b></span>
+        <span style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn ghost" id="copyUpiBtn" type="button">Copy UPI ID</button>
+          <a class="btn" id="upiPayBtn" href="#">Pay in UPI app</a>
+        </span>
+      </div>
+      <p class="muted">Pay the exact total shown above. After paying, note the <b>UTR number</b> (12-digit reference number in your UPI app) — you will enter it below.</p>
+
+      <h3>Step 2 — Send UTR + payment screenshot</h3>
+      <label class="f" for="utrInput">UTR number</label>
+      <input type="text" id="utrInput" placeholder="e.g. 402288776655" inputmode="numeric" maxlength="30">
+      <label class="f" for="shotInput">Payment screenshot (photo of the successful payment)</label>
+      <input type="file" id="shotInput" accept="image/*">
+      <div style="margin-top:18px"><button class="btn big" id="submitBtn" type="button" style="width:100%;justify-content:center">Submit UTR</button></div>
+      <div class="msg" id="submitMsg"></div>
+      <p class="muted">Your request goes to the admin for checking. Premium starts only after approval — you can watch the status in <b>My Requests</b> below.</p>
+    </div>
+
+    <div id="freeClaimSection" class="hidden">
+      <p class="muted">Your coupon covers the full price. Just tap the button — your request will still go to the admin for approval, and Premium starts after approval.</p>
+      <button class="btn big" id="claimBtn" type="button" style="width:100%;justify-content:center">Buy Premium</button>
+      <div class="msg" id="claimMsg"></div>
+    </div>
+  </div>
+
+  <!-- my requests -->
+  <div class="card hidden" id="requestsCard">
+    <h2>My Requests</h2>
+    <div id="requestsBox"><p class="muted">Loading…</p></div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <span>© Link To QR</span><a href="/privacy.html">Privacy Policy</a><a href="/terms.html">Terms &amp; Conditions</a><a href="/">Tools</a>
+</footer>
+
+<script type="module" src="/js/header.js"></script>
+<script type="module">
+import {
+  auth, db, onAuthStateChanged, sendEmailVerification,
+  doc, getDoc, addDoc, collection, query, where, orderBy, limit, getDocs,
+  serverTimestamp, writeBatch, loadConfig, loadProfile, planPrice, isPremium,
+  needsEmailVerify, PLAN_KEYS, PLAN_NAMES, PLAN_MONTHS, fmtDate, esc
+} from "/js/fb.js";
+
+const $ = id => document.getElementById(id);
+let me = null, cfg = {}, selectedPlan = "1m";
+let coupon = null; // {code, amount} flat ₹, or {code, percent} legacy
+
+function basePrice() { return planPrice(cfg, selectedPlan); }
+function discountFor(price) {
+  if (!coupon) return 0;
+  if (coupon.amount != null) return Math.min(coupon.amount, price);
+  if (coupon.percent) return Math.round(price * coupon.percent / 100);
+  return 0;
+}
+function finalPrice() { return Math.max(0, basePrice() - discountFor(basePrice())); }
+
+function renderPrice() {
+  const base = basePrice(), fin = finalPrice();
+  $("finalPrice").textContent = "₹" + fin;
+  $("strikePrice").textContent = coupon && fin !== base ? "₹" + base : "";
+  const free = fin === 0;
+  $("paySection").classList.toggle("hidden", free);
+  $("freeClaimSection").classList.toggle("hidden", !free);
+  const upi = (cfg.upiId || "").trim();
+  $("upiIdText").textContent = upi || "(not set by admin yet)";
+  $("upiPayBtn").href = upi
+    ? "upi://pay?pa=" + encodeURIComponent(upi) + "&pn=" + encodeURIComponent("Link To QR") + "&am=" + fin + "&cu=INR"
+    : "#";
+}
+
+function renderPlans() {
+  $("plans").innerHTML = PLAN_KEYS.map(k => `
+    <div class="plan ${k === selectedPlan ? "sel" : ""}" data-plan="${k}">
+      <div class="nm">${PLAN_NAMES[k]}</div>
+      <div class="pr">₹${planPrice(cfg, k)}</div>
+      <div class="muted">${PLAN_MONTHS[k]} month${PLAN_MONTHS[k] > 1 ? "s" : ""} of Premium</div>
+    </div>`).join("");
+  document.querySelectorAll(".plan").forEach(el =>
+    el.addEventListener("click", () => { selectedPlan = el.dataset.plan; renderPlans(); renderPrice(); }));
+}
+
+$("applyCouponBtn").addEventListener("click", async () => {
+  const code = $("couponInput").value.trim().toUpperCase();
+  const m = $("couponMsg");
+  coupon = null;
+  if (!code) { m.textContent = "Type a coupon code first."; m.className = "msg warn"; renderPrice(); return; }
+  m.textContent = "Checking coupon…"; m.className = "msg";
+  try {
+    const snap = await getDoc(doc(db, "coupons", code));
+    if (!snap.exists()) { m.textContent = "Invalid coupon code"; m.className = "msg err"; }
+    else {
+      const d = snap.data();
+      const limitN = Number(d.usageLimit || 0), usedN = Number(d.usedCount || 0);
+      if (d.deleted === true) { m.textContent = "This coupon has expired"; m.className = "msg err"; }
+      else if (limitN > 0 && usedN >= limitN) {
+        const any = await anyCouponUsable();
+        m.textContent = any ? "This coupon has expired"
+          : "All coupons are used up! Stay tuned — new offers are coming soon.";
+        m.className = "msg err";
+      }
+      else if (d.active !== true) { m.textContent = "This coupon is not active."; m.className = "msg err"; }
+      else if (d.amount != null && Number(d.amount) > 0) {
+        coupon = { code, amount: Number(d.amount) };
+        m.textContent = "🎉 You saved ₹" + coupon.amount + "!";
+        m.className = "msg ok";
+        m.animate([{ transform: "scale(1)" }, { transform: "scale(1.12)" }, { transform: "scale(1)" }], { duration: 350 });
+      } else if (d.percent) {
+        coupon = { code, percent: Number(d.percent) };
+        m.textContent = "🎉 " + coupon.percent + "% off applied!";
+        m.className = "msg ok";
+      } else { m.textContent = "This coupon is not valid."; m.className = "msg err"; }
+    }
+  } catch (e) { m.textContent = "Could not check the coupon (network problem?)."; m.className = "msg err"; }
+  renderPrice();
+});
+
+const MSG_ALL_USED = "All coupons are used up! Stay tuned — new offers are coming soon.";
+function couponUsable(d) {
+  if (!d || d.deleted === true) return false;
+  const limitN = Number(d.usageLimit || 0), usedN = Number(d.usedCount || 0);
+  return limitN <= 0 || usedN < limitN;
+}
+async function anyCouponUsable() {
+  try {
+    const snap = await getDocs(collection(db, "coupons"));
+    let any = false;
+    snap.forEach(d2 => { if (couponUsable(d2.data())) any = true; });
+    return any;
+  } catch (e) { return true; }
+}
+async function showCouponNote() {
+  const n = $("couponNote");
+  if (!n) return;
+  const any = await anyCouponUsable();
+  n.textContent = any ? "" : MSG_ALL_USED;
+  n.className = "msg warn";
+  n.style.display = any ? "none" : "block";
+}
+
+$("copyUpiBtn").addEventListener("click", async () => {
+  const upi = (cfg.upiId || "").trim(); if (!upi) return;
+  try { await navigator.clipboard.writeText(upi); $("submitMsg").textContent = "UPI ID copied ✓"; $("submitMsg").className = "msg ok"; } catch (_) {}
+});
+
+/** Convert the picked screenshot to a base64 JPEG string (no "data:"
+ *  prefix). The screenshot travels inside the Firestore payRequests
+ *  document as `screenshotB64` — same scheme as the app — because
+ *  Firebase Storage needs the paid Blaze plan and this project is
+ *  free-only. Max dimension 1200px, JPEG quality starts at 0.7 and
+ *  steps down (then the scale steps down) until the base64 payload is
+ *  at most 700,000 chars, safely under Firestore's document limit. */
+function fileToScreenshotB64(file) {
+  const MAX_B64 = 700000;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let scale = Math.min(1, 1200 / Math.max(img.width, img.height));
+      let quality = 0.7;
+      let b64 = "";
+      for (let attempt = 0; attempt < 12; attempt++) {
+        const cv = document.createElement("canvas");
+        cv.width = Math.max(1, Math.round(img.width * scale));
+        cv.height = Math.max(1, Math.round(img.height * scale));
+        cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        const dataUrl = cv.toDataURL("image/jpeg", quality);
+        b64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+        if (b64.length <= MAX_B64) { resolve(b64); return; }
+        if (quality > 0.3) quality = Math.max(0.3, quality - 0.1);
+        else scale *= 0.8;
+      }
+      reject(new Error("image too large"));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("bad image")); };
+    img.src = url;
+  });
+}
+
+async function createRequest(utr, screenshotB64) {
+  const fields = {
+    uid: me.uid,
+    email: me.email || "",
+    name: me.displayName || "",
+    plan: selectedPlan,
+    months: PLAN_MONTHS[selectedPlan],
+    amountPaid: finalPrice(),
+    couponCode: coupon ? coupon.code : "",
+    utr: utr,
+    status: "pending",
+    createdAt: serverTimestamp()
+  };
+  if (screenshotB64) fields.screenshotB64 = screenshotB64;
+  if (!coupon) { await addDoc(collection(db, "payRequests"), fields); return; }
+  // Coupon used: the request and the coupon's usedCount +1 are ONE atomic
+  // batch — the creation is the use (the ₹0 claim flow included). The
+  // coupon is re-read fresh; the rules allow exactly +1 and nothing else.
+  const cRef = doc(db, "coupons", coupon.code);
+  const cSnap = await getDoc(cRef);
+  if (!cSnap.exists() || !couponUsable(cSnap.data())) {
+    throw new Error("coupon-used-up");
+  }
+  const usedN = Number(cSnap.data().usedCount || 0);
+  const batch = writeBatch(db);
+  batch.set(doc(collection(db, "payRequests")), fields);
+  batch.update(cRef, { usedCount: usedN + 1 });
+  await batch.commit();
+}
+
+$("submitBtn").addEventListener("click", async () => {
+  const m = $("submitMsg"), b = $("submitBtn");
+  const utr = $("utrInput").value.trim();
+  const file = $("shotInput").files[0];
+  if (utr.length < 6) { m.textContent = "Please enter the UTR number from your payment."; m.className = "msg err"; return; }
+  if (!file) { m.textContent = "Please attach the payment screenshot — both UTR and screenshot are needed."; m.className = "msg err"; return; }
+  if (!file.type.startsWith("image/")) { m.textContent = "The screenshot must be an image file."; m.className = "msg err"; return; }
+  b.disabled = true; b.textContent = "Preparing screenshot…"; m.textContent = "";
+  try {
+    const screenshotB64 = await fileToScreenshotB64(file);
+    b.textContent = "Sending request…";
+    await createRequest(utr, screenshotB64);
+    m.textContent = "Request sent ✓ Premium will start after approval.";
+    m.className = "msg ok";
+    b.textContent = "Submit UTR";
+    loadMyRequests();
+  } catch (e) {
+    m.textContent = (e && e.message === "coupon-used-up")
+      ? "This coupon just got used up. Please remove it and try again."
+      : (e && e.message === "image too large")
+      ? "That screenshot is too large even after shrinking. Please pick a smaller or clearer image and try again."
+      : "Could not send. Check your internet and try again.";
+    m.className = "msg err";
+    b.disabled = false; b.textContent = "Submit UTR";
+    return;
+  }
+  b.disabled = false;
+});
+
+$("claimBtn").addEventListener("click", async () => {
+  const m = $("claimMsg"), b = $("claimBtn");
+  b.disabled = true; m.textContent = "Sending request…"; m.className = "msg";
+  try {
+    await createRequest("COUPON", null);
+    m.textContent = "Request sent ✓ Premium will start after approval.";
+    m.className = "msg ok";
+    loadMyRequests();
+  } catch (e) {
+    m.textContent = (e && e.message === "coupon-used-up")
+      ? "This coupon just got used up. Please remove it and try again."
+      : "Could not send. Check your internet and try again.";
+    m.className = "msg err";
+  }
+  b.disabled = false;
+});
+
+async function loadMyRequests() {
+  const box = $("requestsBox");
+  try {
+    const q = query(collection(db, "payRequests"),
+      where("uid", "==", me.uid), orderBy("createdAt", "desc"), limit(10));
+    const snap = await getDocs(q);
+    if (snap.empty) { box.innerHTML = '<p class="muted">No payment requests yet.</p>'; return; }
+    let html = '<table class="req"><tr><th>Plan</th><th>Date</th><th>Status</th></tr>';
+    snap.forEach(d => {
+      const r = d.data();
+      const st = (r.status || "pending").toLowerCase();
+      html += `<tr><td>${esc(PLAN_NAMES[r.plan] || r.plan || "")} — ₹${esc(r.amountPaid ?? "")}</td>` +
+        `<td>${esc(fmtDate(r.createdAt))}</td>` +
+        `<td><span class="chip ${st}">${esc(st[0].toUpperCase() + st.slice(1))}</span>` +
+        (st === "rejected" && r.rejectReason ? `<div class="muted" style="margin-top:4px">Reason: ${esc(r.rejectReason)}</div>` : "") +
+        `</td></tr>`;
+    });
+    box.innerHTML = html + "</table>";
+  } catch (e) {
+    box.innerHTML = '<p class="muted">Couldn\'t load your requests.</p>';
+  }
+}
+
+$("gateResend").addEventListener("click", async () => {
+  if (!auth.currentUser) return;
+  try { await sendEmailVerification(auth.currentUser); $("gateMsg").textContent = "Verification email sent again."; $("gateMsg").className = "msg ok"; }
+  catch (e) { $("gateMsg").textContent = "Could not send. Please wait a little and try again."; $("gateMsg").className = "msg err"; }
+});
+$("gateRecheck").addEventListener("click", async () => {
+  const u = auth.currentUser; if (!u) return;
+  await u.reload();
+  if (u.emailVerified) location.reload();
+  else { $("gateMsg").textContent = "Not verified yet — tap the link in the email first."; $("gateMsg").className = "msg warn"; }
+});
+
+onAuthStateChanged(auth, async user => {
+  me = user;
+  $("signedOutCard").classList.toggle("hidden", !!user);
+  if (!user) { $("buyCard").classList.add("hidden"); $("requestsCard").classList.add("hidden"); $("gateCard").classList.add("hidden"); return; }
+  if (needsEmailVerify(user)) {
+    $("gateCard").classList.remove("hidden");
+    $("buyCard").classList.add("hidden"); $("requestsCard").classList.add("hidden");
+    return;
+  }
+  $("gateCard").classList.add("hidden");
+  cfg = await loadConfig();
+  const profile = await loadProfile(user.uid);
+  if (profile && profile.banned === true) {
+    $("bannedCard").classList.remove("hidden");
+    $("buyCard").classList.add("hidden"); $("requestsCard").classList.add("hidden");
+    return;
+  }
+  if (isPremium(profile)) {
+    $("statusTitle").textContent = "You are Premium ⭐";
+    $("statusLine").textContent = "Premium is active on your account" +
+      (profile.premiumUntil ? " until " + fmtDate(profile.premiumUntil) : "") +
+      ". Buying another plan adds more time on top.";
+  } else {
+    $("statusTitle").textContent = "Choose a plan";
+    $("statusLine").textContent = "Pay by UPI, send the UTR + screenshot, and Premium starts after the admin approves.";
+  }
+  $("buyCard").classList.remove("hidden");
+  showCouponNote();
+  $("requestsCard").classList.remove("hidden");
+  renderPlans(); renderPrice(); loadMyRequests();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>All Tools — Link To QR</title>
+<link rel="stylesheet" href="/css/site.css">
+<style>
+  :root{
+    --bg:#0A0F18; --surface:#121A28; --surface2:#1A2436; --line:#263449;
+    --text:#F3F4F6; --muted:#9CA3AF; --primary:#3B82F6; --radius:14px;
+    --shadow:0 10px 28px rgba(0,0,0,.38);
+  }
+  .hub-hero{margin:14px 14px 0;padding:20px 18px;border-radius:20px;
+    background:linear-gradient(120deg,#0A2E6E 0%,#071F45 52%,#101A2C 100%);
+    border:1px solid #274B8F;box-shadow:var(--shadow);
+    display:flex;align-items:center;gap:15px}
+  .hub-hero-ico{flex:0 0 auto;width:56px;height:56px;border-radius:17px;
+    display:flex;align-items:center;justify-content:center;font-size:29px;
+    background:linear-gradient(135deg,#60A5FA,#2563EB);
+    box-shadow:0 8px 20px rgba(37,99,235,.45)}
+  .hub-hero h1{margin:0;font-size:23px;letter-spacing:.2px;color:var(--text)}
+  .hub-hero p{margin:4px 0 0;color:#BFDBFE;font-size:13.5px;line-height:1.45}
+  .hub-main{max-width:860px;margin:0 auto;padding:16px 14px 60px}
+  .tool-card{display:flex;align-items:flex-start;gap:14px;text-decoration:none;color:var(--text);
+    background:linear-gradient(180deg,#16202F,#121A28);
+    border:1px solid var(--line);border-radius:19px;padding:17px 16px;margin-bottom:13px;
+    box-shadow:var(--shadow);transition:transform .12s ease, border-color .12s ease}
+  .tool-card:active{transform:scale(.982)}
+  .tc-ico{flex:0 0 auto;width:56px;height:56px;border-radius:17px;
+    display:flex;align-items:center;justify-content:center;font-size:28px}
+  .tc-pdf{background:linear-gradient(135deg,#60A5FA,#1D4ED8);box-shadow:0 8px 20px rgba(37,99,235,.35)}
+  .tc-img{background:linear-gradient(135deg,#38BDF8,#0369A1);box-shadow:0 8px 20px rgba(37,99,235,.35)}
+  .tc-scan{background:linear-gradient(135deg,#60A5FA,#2563EB);box-shadow:0 8px 20px rgba(37,99,235,.35)}
+  .tc-edit{background:linear-gradient(135deg,#93C5FD,#2563EB);box-shadow:0 8px 20px rgba(37,99,235,.35)}
+  .tc-body{flex:1;min-width:0}
+  .tc-body b{display:block;font-size:17px;letter-spacing:.2px}
+  .tc-body p{margin:3px 0 0;color:var(--muted);font-size:13.5px;line-height:1.45}
+  .tc-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .chip{font-size:11.5px;font-weight:600;color:#D7DBE0;background:#23272D;
+    border:1px solid #31363D;border-radius:999px;padding:4px 9px;white-space:nowrap}
+  .tc-arrow{flex:0 0 auto;align-self:center;font-size:27px;color:var(--muted);font-weight:300;padding-left:2px}
+</style>
+</head>
+<body>
+<div id="siteHeader"></div>
+<button type="button" id="ltqrBack" style="display:inline-flex;align-items:center;gap:6px;margin:12px 14px 0;padding:8px 18px;border:1px solid #263449;border-radius:999px;background:#121A28;color:#EDF1F0;font:600 14px system-ui,sans-serif;cursor:pointer">← Back</button>
+<script>
+document.getElementById('ltqrBack').addEventListener('click', function(){
+  try { if (window.history.length > 1) { window.history.back(); return; } } catch(e){}
+  try { window.location.href = '/'; } catch(e){}
+});
+</script>
+
+<div class="hub-hero">
+  <div class="hub-hero-ico">🧰</div>
+  <div>
+    <h1>All Tools</h1>
+    <p>PDF, photo, scanner and text tools — everything in one place.</p>
+  </div>
+</div>
+
+<main class="hub-main">
+  <a class="tool-card" href="/tools/pdf-tools.html">
+    <span class="tc-ico tc-pdf">📄</span>
+    <span class="tc-body">
+      <b>PDF Tools</b>
+      <p>Merge, split, convert and protect your PDF files.</p>
+      <span class="tc-chips">
+        <span class="chip">Merge</span><span class="chip">Split</span><span class="chip">Convert</span><span class="chip">Compress</span><span class="chip">Lock</span>
+      </span>
+    </span>
+    <span class="tc-arrow">›</span>
+  </a>
+
+  <a class="tool-card" href="/tools/image-tools.html">
+    <span class="tc-ico tc-img">🖼️</span>
+    <span class="tc-body">
+      <b>Photo Tools</b>
+      <p>Compress, resize, convert and make passport photos.</p>
+      <span class="tc-chips">
+        <span class="chip">JPG to PDF</span><span class="chip">Compress</span><span class="chip">Resize</span><span class="chip">Passport Photo</span>
+      </span>
+    </span>
+    <span class="tc-arrow">›</span>
+  </a>
+
+  <a class="tool-card" href="/tools/scanner.html">
+    <span class="tc-ico tc-scan">📷</span>
+    <span class="tc-body">
+      <b>Scanner</b>
+      <p>Scan documents in high quality, and scan QR codes with the camera.</p>
+      <span class="tc-chips">
+        <span class="chip">Document Scan</span><span class="chip">QR Scan</span><span class="chip">OCR Text</span>
+      </span>
+    </span>
+    <span class="tc-arrow">›</span>
+  </a>
+
+  <a class="tool-card" href="/tools/text-edit.html">
+    <span class="tc-ico tc-edit">✏️</span>
+    <span class="tc-body">
+      <b>Edit Text</b>
+      <p>Change the text that is already inside a PDF or a photo.</p>
+      <span class="tc-chips">
+        <span class="chip">Edit PDF Text</span><span class="chip">Edit Photo Text</span>
+      </span>
+    </span>
+    <span class="tc-arrow">›</span>
+  </a>
+</main>
+<script type="module" src="/js/header.js"></script>
+
+<style>
+body{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:90;display:flex;align-items:flex-end;background:#121A28;border-top:1px solid #263449;box-shadow:0 -10px 30px rgba(0,0,0,.5);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.bnav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;color:#9CA3AF;text-decoration:none;font-size:10.5px;font-weight:600;border-radius:12px;font-family:system-ui,sans-serif}
+.bnav a .bi{font-size:21px;line-height:1.15}
+.bnav a.on{color:#3B82F6}
+.bnav a.bnav-scan .bi{display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#38BDF8,#2563EB);font-size:25px;margin-top:-27px;box-shadow:0 10px 22px rgba(37,99,235,.5);border:3px solid #0A0F18}
+.bnav a.bnav-scan.on{color:#7DD3FC}
+</style>
+<nav class="bnav" aria-label="Main">
+  <a href="/" data-nav="home"><span class="bi">🏠</span>Home</a>
+  <a href="/tools.html" data-nav="tools"><span class="bi">🧰</span>All Tools</a>
+  <a href="/tools/scanner.html" class="bnav-scan" data-nav="scan"><span class="bi">📷</span>Scan</a>
+  <a href="/#history" data-nav="history"><span class="bi">🕘</span>History</a>
+  <a href="/settings.html" data-nav="settings"><span class="bi">⚙️</span>Settings</a>
+</nav>
+<script>
+(function(){ try {
+  var path = ((window.location && location.pathname) || '').split('/').pop() || '';
+  var map = { '':'home', 'index.html':'home', 'tools.html':'tools', 'scanner.html':'scan', 'pdf-tools.html':'tools', 'image-tools.html':'tools', 'text-edit.html':'tools', 'settings.html':'settings' };
+  var key = map[path];
+  if (key){ var el = document.querySelector('.bnav [data-nav="' + key + '"]'); if (el) el.classList.add('on'); }
+  var h = document.querySelector('.bnav [data-nav="history"]');
+  if (h && (path === '' || path === 'index.html') && typeof openHistory === 'function'){
+    h.addEventListener('click', function(ev){ ev.preventDefault(); openHistory(); });
+  }
+} catch(e){} })();
+</script>
+
+</body>
+</html>

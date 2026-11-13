@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.ayan.linktoqr",
+      "sha256_cert_fingerprints": ["07:CD:0D:8C:72:D8:F3:15:20:D1:54:8F:7D:F1:ED:4F:4C:4F:6B:E7:6F:D1:32:5B:A7:76:F8:29:46:D3:3A:40"]
+    }
+  }
+]

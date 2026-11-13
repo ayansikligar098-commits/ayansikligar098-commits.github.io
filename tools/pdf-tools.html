@@ -1,0 +1,1030 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:,">
+<title>PDF Tools — Link To QR</title>
+<!--
+  STAGING / TEST PAGE — not the live app. All libraries are LOCAL files in ./libs/
+  (see libs/VERSIONS.txt). No CDN, no network calls: every file is processed
+  on-device in the browser (Note 18). Every tool ends in a real Download (Note 8.9).
+  Uploads validate the file and show plain errors instead of hanging (Note 17).
+-->
+<style>
+  :root{
+    --bg:#0A0F18; --surface:#121A28; --surface2:#1A2436; --line:#263449;
+    --text:#F3F4F6; --muted:#9CA3AF; --primary:#3B82F6; --primary-dark:#1D4ED8;
+    --red:#F97066; --radius:14px; --shadow:0 8px 24px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
+  header{padding:16px;border-bottom:1px solid var(--line);background:#101A2C;position:sticky;top:0;z-index:5}
+  header h1{margin:0;font-size:20px;letter-spacing:.2px}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  main{max-width:860px;margin:0 auto;padding:16px 14px 60px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+  .toolbtn{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    color:var(--text);padding:14px 10px;font-size:14px;font-weight:700;cursor:pointer;text-align:left}
+  .toolbtn small{display:block;color:var(--muted);font-weight:500;font-size:12px;margin-top:3px}
+  .toolbtn.active{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
+  .panel{display:none;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;box-shadow:var(--shadow)}
+  .panel.open{display:block}
+  .panel h2{margin:0 0 4px;font-size:17px}
+  .panel .hint{color:var(--muted);font-size:13px;margin:0 0 14px}
+  label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}
+  input[type=text],input[type=number],input[type=password],select{
+    width:100%;background:var(--surface2);border:1px solid var(--line);border-radius:10px;
+    color:var(--text);padding:11px 12px;font-size:15px}
+  input[type=file]{width:100%;background:var(--surface2);border:1px dashed var(--line);
+    border-radius:10px;color:var(--text);padding:12px;font-size:14px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>div{flex:1;min-width:130px}
+  button.go{margin-top:16px;width:100%;background:var(--primary);color:#FFFFFF;border:0;
+    border-radius:12px;padding:13px;font-size:15px;font-weight:800;cursor:pointer}
+  button.go:disabled{opacity:.45;cursor:not-allowed}
+  .fileinfo{display:none;margin-top:10px;font-size:13px;color:var(--muted)}
+  .fileinfo b{color:var(--text)}
+  .status{margin-top:14px;font-size:14px;min-height:20px}
+  .status.ok{color:var(--primary)}
+  .error{display:none;margin-top:12px;background:#3A1D1A;border:1px solid #7A271A;color:#FECDCA;
+    padding:10px 12px;border-radius:10px;font-size:14px}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--muted);
+    border-top-color:var(--primary);border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:-2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  ul.merge{list-style:none;margin:12px 0 0;padding:0}
+  ul.merge li{display:flex;align-items:center;gap:8px;background:var(--surface2);
+    border:1px solid var(--line);border-radius:10px;padding:9px 10px;margin-bottom:8px;font-size:14px}
+  ul.merge li.dragging{opacity:.4}
+  ul.merge .handle{cursor:grab;color:var(--muted);font-size:17px;user-select:none}
+  ul.merge .fname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  ul.merge button{background:none;border:1px solid var(--line);color:var(--text);border-radius:8px;
+    padding:4px 8px;cursor:pointer;font-size:13px}
+  .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .thumbs img{width:110px;border-radius:8px;border:1px solid var(--line);background:#fff}
+  .note{font-size:12px;color:var(--muted);margin-top:10px}
+</style>
+
+<style id="ltqr-redesign">
+/* ===== Link To QR redesign layer (presentation only) ===== */
+body{background-image:radial-gradient(1100px 480px at 50% -140px, rgba(37,99,235,.10), transparent 70%)}
+header{background:linear-gradient(180deg,var(--surface2),#101A2C)}
+header h1{display:flex;align-items:center;gap:12px}
+header h1::before{content:"📄";display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:13px;font-size:22px;background:linear-gradient(135deg,#60A5FA,#1D4ED8);box-shadow:0 8px 18px rgba(37,99,235,.35);flex:0 0 auto}
+.panel{border-radius:18px;box-shadow:0 14px 34px rgba(0,0,0,.42)}
+.toolbtn{border-radius:16px;transition:transform .12s ease,border-color .12s ease,box-shadow .12s ease}
+.toolbtn:hover{transform:translateY(-1px);border-color:#3A4149}
+button.go{border-radius:14px;box-shadow:0 10px 24px rgba(59,130,246,.25);letter-spacing:.02em}
+input[type=text],input[type=number],input[type=password],select{border-radius:12px}
+input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(59,130,246,.22)}
+</style>
+</head>
+<body>
+<div style="position:sticky;top:0;z-index:60;background:rgba(15,17,19,.97);border-bottom:1px solid #263449;padding:9px 14px;font-family:system-ui,sans-serif;display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+  <a href="/" style="color:#EDF1F0;text-decoration:none;font-weight:800">▦ Link To QR</a>
+  <a href="/tools/pdf-tools.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">PDF Tools</a>
+  <a href="/tools/image-tools.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Photo Tools</a>
+  <a href="/tools/scanner.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Scanner</a>
+  <a href="/tools/text-edit.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Text Edit</a>
+  <span style="margin-left:auto;display:flex;gap:12px">
+    <a href="/premium.html" style="color:#FFC95C;text-decoration:none;font-size:13.5px;font-weight:700">Premium</a>
+    <a href="/login.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Login</a>
+  </span>
+</div>
+<button type="button" id="ltqrBack" style="display:inline-flex;align-items:center;gap:6px;margin:12px 14px 0;padding:8px 18px;border:1px solid #263449;border-radius:999px;background:#121A28;color:#EDF1F0;font:600 14px system-ui,sans-serif;cursor:pointer">← Back</button>
+<script>
+document.getElementById('ltqrBack').addEventListener('click', function(){
+  try { if (window.history.length > 1) { window.history.back(); return; } } catch(e){}
+  try { window.location.href = '/'; } catch(e){}
+});
+</script>
+<header>
+  <h1>📄 PDF Tools</h1>
+  <p>All files are processed on your device. Nothing is uploaded to any server.</p>
+</header>
+<main>
+  <div class="grid" id="toolgrid">
+    <button class="toolbtn" data-tool="toimg">PDF to JPG / PNG<small>Every page as an image</small></button>
+    <button class="toolbtn" data-tool="merge">Merge PDF<small>Many PDFs into one, drag to reorder</small></button>
+    <button class="toolbtn" data-tool="split">Split PDF<small>One PDF per page</small></button>
+    <button class="toolbtn" data-tool="delpage">Delete Pages<small>Remove pages you pick</small></button>
+    <button class="toolbtn" data-tool="extract">Extract Pages<small>Picked pages as a new PDF</small></button>
+    <button class="toolbtn" data-tool="rotate">Rotate Pages<small>Turn pages 90° / 180° / 270°</small></button>
+    <button class="toolbtn" data-tool="watermark">Add Watermark<small>Text stamped on every page</small></button>
+    <button class="toolbtn" data-tool="compress">Compress PDF<small>Make the file smaller</small></button>
+    <button class="toolbtn" data-tool="target">PDF Size (Target KB)<small>Shrink to under 200 KB / 100 KB…</small></button>
+    <button class="toolbtn" data-tool="lock">Lock PDF<small>Add a password (AES-256)</small></button>
+    <button class="toolbtn" data-tool="unlock">Unlock PDF<small>Remove the password</small></button>
+  </div>
+
+  <!-- PDF to JPG/PNG -->
+  <section class="panel" id="panel-toimg">
+    <h2>PDF to JPG / PNG</h2>
+    <p class="hint">Choose a PDF. Every page is converted to an image. Convert first, then download the images.</p>
+    <label>PDF file</label>
+    <input type="file" accept="application/pdf,.pdf" data-pick>
+    <div class="fileinfo"></div>
+    <div class="row">
+      <div><label>Format</label>
+        <select id="toimg-format"><option value="jpeg">JPG</option><option value="png">PNG</option></select></div>
+      <div><label>Quality / Size</label>
+        <select id="toimg-scale"><option value="1.5">Normal</option><option value="2.5">High (HD)</option><option value="1">Small</option></select></div>
+    </div>
+    <button class="go" data-run="toimg">Convert</button>
+    <div class="thumbs"></div>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Merge -->
+  <section class="panel" id="panel-merge">
+    <h2>Merge PDF</h2>
+    <p class="hint">Add 2 or more PDFs, drag them into the order you want, then merge.</p>
+    <label>PDF files (you can add more than once)</label>
+    <input type="file" accept="application/pdf,.pdf" multiple data-pick-multi>
+    <ul class="merge" id="merge-list"></ul>
+    <button class="go" data-run="merge">Merge</button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Split -->
+  <section class="panel" id="panel-split">
+    <h2>Split PDF</h2>
+    <p class="hint">Creates one separate PDF for every page. Convert first, then download them one by one.</p>
+    <label>PDF file</label>
+    <input type="file" accept="application/pdf,.pdf" data-pick>
+    <div class="fileinfo"></div>
+    <button class="go" data-run="split">Split</button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Delete pages -->
+  <section class="panel" id="panel-delpage">
+    <h2>Delete Pages</h2>
+    <p class="hint">Type the pages to remove, like <b>2</b> or <b>1,3-5</b>. The rest is saved as a new PDF.</p>
+    <label>PDF file</label>
+    <input type="file" accept="application/pdf,.pdf" data-pick>
+    <div class="fileinfo"></div>
+    <label>Pages to delete</label>
+    <input type="text" id="del-pages" placeholder="e.g. 2 or 1,3-5" inputmode="text">
+    <button class="go" data-run="delpage">Delete Pages</button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Extract pages -->
+  <section class="panel" id="panel-extract">
+    <h2>Extract Pages</h2>
+    <p class="hint">Type the pages to keep, like <b>1</b> or <b>2-4,7</b>. Only those pages go into the new PDF.</p>
+    <label>PDF file</label>
+    <input type="file" accept="application/pdf,.pdf" data-pick>
+    <div class="fileinfo"></div>
+    <label>Pages to extract</label>
+    <input type="text" id="ext-pages" placeholder="e.g. 2-4,7" inputmode="text">
+    <button class="go" data-run="extract">Extract Pages</button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Rotate -->
+  <section class="panel" id="panel-rotate">
+    <h2>Rotate Pages</h2>
+    <p class="hint">Turn pages by 90°, 180° or 270°. Leave pages empty to rotate all pages.</p>
+    <label>PDF file</label>
+    <input type="file" accept="application/pdf,.pdf" data-pick>
+    <div class="fileinfo"></div>
+    <div class="row">
+      <div><label>Pages (optional)</label><input type="text" id="rot-pages" placeholder="all pages"></div>
+      <div><label>Turn by</label>
+        <select id="rot-angle"><option value="90">90° →</option><option value="180">180°</option><option value="270">270° →</option></select></div>
+    </div>
+    <button class="go" data-run="rotate">Rotate</button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Watermark -->
+  <section class="panel" id="panel-watermark">
+    <h2>Add Watermark</h2>
+    <p class="hint">Your text is stamped diagonally across every page.</p>
+    <label>PDF file</label>
+    <input type="file" accept="application/pdf,.pdf" data-pick>
+    <div class="fileinfo"></div>
+    <div class="row">
+      <div><label>Watermark text</label><input type="text" id="wm-text" value="CONFIDENTIAL"></div>
+      <div><label>Lightness</label>
+        <select id="wm-opacity"><option value="0.35">Dark</option><option value="0.2" selected>Medium</option><option value="0.1">Light</option></select></div>
+    </div>
+    <button class="go" data-run="watermark">Add Watermark</button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Compress -->
+  <section class="panel" id="panel-compress">
+    <h2>Compress PDF</h2>
+    <p class="hint">Rebuilds the PDF smaller. Works best on scanned / photo PDFs.</p>
+    <label>PDF file</label>
+    <input type="file" accept="application/pdf,.pdf" data-pick>
+    <div class="fileinfo"></div>
+    <label>Strength</label>
+    <select id="cmp-level">
+      <option value="light">Light — best quality</option>
+      <option value="medium" selected>Medium</option>
+      <option value="strong">Strong — smallest size</option>
+    </select>
+    <button class="go" data-run="compress">Compress</button>
+    <p class="note">Note: pages are rebuilt as images, so text inside will no longer be selectable.</p>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Target size -->
+  <section class="panel" id="panel-target">
+    <h2>PDF Size — Target KB</h2>
+    <p class="hint">Shrinks the PDF to fit under your target size — handy for online forms.</p>
+    <label>PDF file</label>
+    <input type="file" accept="application/pdf,.pdf" data-pick>
+    <div class="fileinfo"></div>
+    <label>Target size (KB)</label>
+    <input type="number" id="tgt-kb" value="200" min="20" max="10240">
+    <button class="go" data-run="target">Shrink</button>
+    <p class="note">Note: pages are rebuilt as images, so text inside will no longer be selectable. If the target is too small to reach, you get the smallest possible file and a message saying so.</p>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Lock -->
+  <section class="panel" id="panel-lock">
+    <h2>Lock PDF</h2>
+    <p class="hint">Adds a real password lock (AES-256). The file will ask for this password to open.</p>
+    <label>PDF file</label>
+    <input type="file" accept="application/pdf,.pdf" data-pick>
+    <div class="fileinfo"></div>
+    <label>New password</label>
+    <input type="password" id="lock-pw" autocomplete="new-password">
+    <label>Repeat password</label>
+    <input type="password" id="lock-pw2" autocomplete="new-password">
+    <button class="go" data-run="lock">Lock</button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Unlock -->
+  <section class="panel" id="panel-unlock">
+    <h2>Unlock PDF</h2>
+    <p class="hint">Removes the password from a locked PDF. You must know the current password.</p>
+    <label>PDF file</label>
+    <input type="file" accept="application/pdf,.pdf" data-pick>
+    <div class="fileinfo"></div>
+    <label>Current password</label>
+    <input type="password" id="unlock-pw" autocomplete="current-password">
+    <button class="go" data-run="unlock">Unlock</button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+</main>
+<script src="libs/pdf-lib.min.js"></script>
+<script src="libs/pdf.min.js"></script>
+<script>
+(function(){
+'use strict';
+var PDFLib = window.PDFLib;
+var pdfjsLib = window.pdfjsLib;
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'libs/pdf.worker.min.js';
+
+/* ---------- small helpers ---------- */
+function $(sel, root){ return (root||document).querySelector(sel); }
+function fmtKB(bytes){ return bytes >= 1048576 ? (bytes/1048576).toFixed(2)+' MB' : Math.max(1, Math.round(bytes/1024))+' KB'; }
+function baseName(name){ return (name||'document').replace(/\.pdf$/i,''); }
+function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+
+
+
+
+function download(blob, filename){
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+}
+function downloadBytes(bytes, filename){ download(new Blob([bytes], {type:'application/pdf'}), filename); }
+
+function panelEl(tool){ return document.getElementById('panel-'+tool); }
+function setStatus(tool, html, ok){
+  var st = $('.status', panelEl(tool)); if(!st) return;
+  st.innerHTML = html || ''; st.className = 'status' + (ok ? ' ok' : '');
+}
+var ERROR_CODES = { merge:'PDF-01', split:'PDF-02', delpage:'PDF-03', extract:'PDF-04', rotate:'PDF-05', watermark:'PDF-06', toimg:'PDF-07', compress:'PDF-08', target:'PDF-09', lock:'PDF-10', unlock:'PDF-11' };
+function setError(tool, msg){
+  var er = $('.error', panelEl(tool)); if(!er) return;
+  if (msg) msg = msg + ' [Code: ' + (ERROR_CODES[tool] || 'PDF-00') + ']';
+  er.textContent = msg || ''; er.style.display = msg ? 'block' : 'none';
+}
+function setBusy(tool, busy){
+  var btn = $('[data-run="'+tool+'"]'); if(btn) btn.disabled = busy;
+  if(busy) setStatus(tool, '<span class="spin"></span> Working… please wait.');
+}
+
+/* ---------- file picking + validation (Note 17) ---------- */
+/* Each panel keeps: { file, bytes, password } for its picked PDF. */
+var picked = {};   // tool -> state
+var mergeFiles = []; // [{name, bytes, password}]
+
+async function readPdfFile(file){
+  if(!file) throw new Error('Please choose a PDF file first.');
+  var isPdfName = /\.pdf$/i.test(file.name) || file.type === 'application/pdf';
+  var buf = new Uint8Array(await file.arrayBuffer());
+  var head = String.fromCharCode(buf[0], buf[1], buf[2], buf[3], buf[4]);
+  if(!isPdfName || head !== '%PDF-'){
+    throw new Error('"'+file.name+'" is not a PDF file. Please choose a real PDF.');
+  }
+  return buf;
+}
+
+/* In-page password prompt for locked PDFs. window.prompt is unreliable
+   inside the app WebView (a locked PDF simply failed before), so the page
+   asks itself. Resolves with the typed password or null on Cancel. The
+   password lives only in this promise — never stored or sent anywhere. */
+window.ltqrAskPassword = function(fileName, wrongRetry){
+  return new Promise(function(resolve){
+    var ov = document.getElementById('ltqr-pw-overlay');
+    var input = document.getElementById('ltqr-pw-input');
+    document.getElementById('ltqr-pw-name').textContent = fileName ? ('“' + fileName + '” needs its password to open.') : 'This file needs its password to open.';
+    document.getElementById('ltqr-pw-note').style.display = wrongRetry ? 'block' : 'none';
+    input.value = '';
+    ov.classList.add('open');
+    function done(v){
+      ov.classList.remove('open');
+      document.getElementById('ltqr-pw-open').onclick = null;
+      document.getElementById('ltqr-pw-cancel').onclick = null;
+      input.onkeydown = null;
+      resolve(v);
+    }
+    document.getElementById('ltqr-pw-open').onclick = function(){ done(input.value); };
+    document.getElementById('ltqr-pw-cancel').onclick = function(){ done(null); };
+    input.onkeydown = function(ev){ if(ev.key === 'Enter') done(input.value); };
+    setTimeout(function(){ try { input.focus(); } catch(e){} }, 60);
+  });
+};
+
+/* Load with pdf-lib; if the PDF is password-locked, ask (in-page) and
+   retry — a wrong password re-asks inside the same dialog flow, Cancel
+   stops with a clear message. A successful password is remembered in
+   holder.password for this picked file only. */
+async function loadPdfLib(bytes, password, holder){
+  var pw = password || null;
+  while (true) {
+    try {
+      var doc = await PDFLib.PDFDocument.load(bytes, pw ? { password: pw } : {});
+      if(holder && pw) holder.password = pw;
+      return doc;
+    } catch(e) {
+      var probe = null;
+      try { probe = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true }); } catch(_){}
+      if(probe && probe.isEncrypted){
+        var ask = await window.ltqrAskPassword(holder && holder.fileName, !!pw);
+        if(ask === null || ask === '') {
+          throw new Error(pw ? 'Wrong password for this PDF. Please try again.' : 'This PDF needs a password to open.');
+        }
+        pw = ask;
+        continue;
+      }
+      throw new Error('This PDF could not be read. It may be damaged.');
+    }
+  }
+}
+window.ltqrLoadWithPassword = loadPdfLib;
+/* Shared loader for the tool runners: takes a picked-file state
+   {bytes, password, file} and keeps state.password in sync. */
+window.ltqrLoadLib = async function(st){
+  var holder = { password: st.password || null, fileName: st.file ? st.file.name : '' };
+  var doc = await loadPdfLib(st.bytes.slice(), holder.password, holder);
+  if(holder.password) st.password = holder.password;
+  return doc;
+};
+async function docPageCount(bytes, holder){
+  var doc = await loadPdfLib(bytes.slice(), null, holder || {});
+  return doc.getPageCount();
+}
+
+function wirePicker(tool){
+  var panel = panelEl(tool);
+  var input = $('[data-pick]', panel);
+  if(!input) return;
+  input.addEventListener('change', async function(){
+    setError(tool, ''); setStatus(tool, '');
+    var info = $('.fileinfo', panel);
+    var file = input.files[0];
+    if(!file){ picked[tool] = null; if(info) info.style.display='none'; return; }
+    try {
+      setStatus(tool, '<span class="spin"></span> Reading file…');
+      var bytes = await readPdfFile(file);
+      var holder = { fileName: file.name };
+      var pages = await docPageCount(bytes, holder);
+      picked[tool] = { file: file, bytes: bytes, password: holder.password || null };
+      if(info){
+        info.innerHTML = '<b>'+file.name+'</b> — '+pages+' page'+(pages>1?'s':'')+', '+fmtKB(bytes.length);
+        info.style.display = 'block';
+      }
+      setStatus(tool, 'File ready.', true);
+    } catch(e) {
+      picked[tool] = null;
+      if(info) info.style.display = 'none';
+      input.value = '';
+      setStatus(tool, ''); setError(tool, e.message);
+    }
+  });
+}
+
+/* Page-range text like "2" or "1,3-5" -> sorted unique 0-based indices */
+function parseRanges(text, pageCount){
+  var out = [];
+  var parts = String(text).split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+  if(!parts.length) throw new Error('Please type which pages, e.g. 2 or 1,3-5.');
+  for(var i=0;i<parts.length;i++){
+    var m = parts[i].match(/^(\d+)\s*-\s*(\d+)$/);
+    if(m){
+      var a = +m[1], b = +m[2];
+      if(a > b) throw new Error('Bad range "'+parts[i]+'" — start must be smaller.');
+      for(var p=a;p<=b;p++) out.push(p);
+    } else if(/^\d+$/.test(parts[i])) {
+      out.push(+parts[i]);
+    } else {
+      throw new Error('"'+parts[i]+'" is not a page number or range.');
+    }
+  }
+  var seen = {}, res = [];
+  out.forEach(function(p){
+    if(p < 1 || p > pageCount) throw new Error('Page '+p+' does not exist — this PDF has '+pageCount+' page(s).');
+    if(!seen[p]){ seen[p]=1; res.push(p-1); }
+  });
+  res.sort(function(a,b){ return a-b; });
+  return res;
+}
+
+/* Render every page of a PDF to JPEG blobs via PDF.js (for compress / target size). */
+async function renderPagesToJpeg(state, scale, quality, tool, label){
+  var task = pdfjsLib.getDocument({ data: state.bytes.slice(), password: state.password || undefined });
+  var pdf = await task.promise;
+  var blobs = [];
+  for(var i=1;i<=pdf.numPages;i++){
+    setStatus(tool, '<span class="spin"></span> '+label+' — page '+i+' of '+pdf.numPages+'…');
+    var page = await pdf.getPage(i);
+    var vp = page.getViewport({ scale: scale });
+    var canvas = document.createElement('canvas');
+    canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    var blob = await new Promise(function(res){ canvas.toBlob(res, 'image/jpeg', quality); });
+    if(!blob) throw new Error('Could not process page '+i+'.');
+    blobs.push({ blob: blob, w: page.getViewport({scale:1}).width, h: page.getViewport({scale:1}).height });
+    page.cleanup();
+  }
+  await pdf.destroy();
+  return blobs;
+}
+async function buildPdfFromJpegs(blobs){
+  var out = await PDFLib.PDFDocument.create();
+  for(var i=0;i<blobs.length;i++){
+    var img = await out.embedJpg(new Uint8Array(await blobs[i].blob.arrayBuffer()));
+    var page = out.addPage([blobs[i].w, blobs[i].h]);
+    page.drawImage(img, { x:0, y:0, width:blobs[i].w, height:blobs[i].h });
+  }
+  return out.save();
+}
+
+/* ---------- tool switching ---------- */
+var grid = document.getElementById('toolgrid');
+grid.addEventListener('click', function(e){
+  var btn = e.target.closest('[data-tool]'); if(!btn) return;
+  document.querySelectorAll('.toolbtn').forEach(function(b){ b.classList.toggle('active', b===btn); });
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('open'); });
+  panelEl(btn.dataset.tool).classList.add('open');
+});
+
+/* ---------- merge list (drag reorder) ---------- */
+var mergeInput = $('[data-pick-multi]', panelEl('merge'));
+var mergeList = document.getElementById('merge-list');
+function renderMergeList(){
+  mergeList.innerHTML = '';
+  mergeFiles.forEach(function(item, idx){
+    var li = document.createElement('li');
+    li.draggable = true; li.dataset.idx = idx;
+    li.innerHTML = '<span class="handle">⠿</span><span class="fname"></span>' +
+      '<button data-mv="-1">↑</button><button data-mv="1">↓</button><button data-rm="1">✕</button>';
+    $('.fname', li).textContent = item.name + ' ('+fmtKB(item.bytes.length)+')';
+    li.addEventListener('dragstart', function(){ li.classList.add('dragging'); });
+    li.addEventListener('dragend', function(){ li.classList.remove('dragging'); });
+    li.addEventListener('dragover', function(e){ e.preventDefault(); });
+    li.addEventListener('drop', function(e){
+      e.preventDefault();
+      var from = +mergeList.querySelector('.dragging').dataset.idx;
+      var to = +li.dataset.idx;
+      if(from === to) return;
+      var moved = mergeFiles.splice(from,1)[0];
+      mergeFiles.splice(to,0,moved);
+      renderMergeList();
+    });
+    li.addEventListener('click', function(e){
+      var mv = e.target.dataset.mv, rm = e.target.dataset.rm;
+      if(rm){ mergeFiles.splice(idx,1); renderMergeList(); return; }
+      if(mv){
+        var j = idx + (+mv);
+        if(j < 0 || j >= mergeFiles.length) return;
+        var t = mergeFiles[idx]; mergeFiles[idx] = mergeFiles[j]; mergeFiles[j] = t;
+        renderMergeList();
+      }
+    });
+    mergeList.appendChild(li);
+  });
+}
+mergeInput.addEventListener('change', async function(){
+  setError('merge',''); setStatus('merge','');
+  var files = Array.prototype.slice.call(mergeInput.files);
+  if(!files.length) return;
+  try {
+    setBusy('merge', true);
+    for(var i=0;i<files.length;i++){
+      setStatus('merge', '<span class="spin"></span> Reading '+files[i].name+'…');
+      var bytes = await readPdfFile(files[i]);
+      var holder = { fileName: files[i].name };
+      await docPageCount(bytes, holder); // validates it really opens
+      mergeFiles.push({ name: files[i].name, bytes: bytes, password: holder.password || null });
+    }
+    renderMergeList();
+    setStatus('merge', mergeFiles.length+' file(s) ready. Drag to set the order.', true);
+  } catch(e) { setError('merge', e.message); }
+  setBusy('merge', false);
+  mergeInput.value = '';
+});
+
+/* Wire every single-file picker, and share state with the tools block. */
+['toimg','split','delpage','extract','rotate','watermark','compress','target','lock','unlock']
+  .forEach(wirePicker);
+window.__picked = picked;
+window.__mergeFiles = mergeFiles;
+})();
+</script>
+<script>
+(function(){
+'use strict';
+var PDFLib = window.PDFLib;
+var pdfjsLib = window.pdfjsLib;
+function $(s, r){ return (r||document).querySelector(s); }
+function fmtKB(b){ return b >= 1048576 ? (b/1048576).toFixed(2)+' MB' : Math.max(1, Math.round(b/1024))+' KB'; }
+function baseName(n){ return (n||'document').replace(/\.pdf$/i,''); }
+function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+function panelEl(t){ return document.getElementById('panel-'+t); }
+function setStatus(t, html, ok){ var st=$('.status',panelEl(t)); if(st){ st.innerHTML=html||''; st.className='status'+(ok?' ok':''); } }
+var ERROR_CODES = { merge:'PDF-01', split:'PDF-02', delpage:'PDF-03', extract:'PDF-04', rotate:'PDF-05', watermark:'PDF-06', toimg:'PDF-07', compress:'PDF-08', target:'PDF-09', lock:'PDF-10', unlock:'PDF-11' };
+function setError(t, msg){ var er=$('.error',panelEl(t)); if(er){ if(msg) msg=msg+' [Code: '+(ERROR_CODES[t]||'PDF-00')+']'; er.textContent=msg||''; er.style.display=msg?'block':'none'; } }
+function setBusy(t, busy){ var b=$('[data-run="'+t+'"]'); if(b) b.disabled=busy; if(busy) setStatus(t,'<span class="spin"></span> Working… please wait.'); }
+function download(blob, filename){ var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); },4000); }
+function downloadBytes(bytes, filename){ download(new Blob([bytes],{type:'application/pdf'}), filename); }
+
+/* ---------- two-step Convert -> Download ----------
+   Convert only produces a pending result (nothing is saved). The separate
+   Download button then saves exactly those converted bytes through the
+   normal download() path (gate + bridge). A single-file result also opens
+   directly after saving in the app; multi-file results keep the old
+   behaviour (Open button for the last file, no repeated auto-open). */
+var pendingResults = {};
+function resultBox(tool){
+  var panel = panelEl(tool); if(!panel) return null;
+  var box = panel.querySelector('.resultbox');
+  if (box) return box;
+  box = document.createElement('div');
+  box.className = 'resultbox';
+  box.style.cssText = 'display:none;margin-top:14px;background:#0E2A52;border:1px solid #3B82F6;border-radius:12px;padding:12px 14px';
+  var info = document.createElement('div');
+  info.className = 'rinfo';
+  info.style.cssText = 'font-size:14px;margin-bottom:10px';
+  box.appendChild(info);
+  var btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'go'; btn.style.marginTop = '0';
+  btn.textContent = '⬇ Download';
+  btn.addEventListener('click', function(){ doDownload(tool); });
+  box.appendChild(btn);
+  var st = panel.querySelector('.status');
+  if (st) panel.insertBefore(box, st); else panel.appendChild(box);
+  return box;
+}
+function hideResult(tool){
+  pendingResults[tool] = null;
+  window.__ltqrAutoOpenNext = false;
+  var panel = panelEl(tool); if(!panel) return;
+  var box = panel.querySelector('.resultbox');
+  if (box) box.style.display = 'none';
+}
+function setResult(tool, files, detail){
+  pendingResults[tool] = files;
+  var box = resultBox(tool); if(!box) return;
+  var total = 0; files.forEach(function(f){ total += f.blob.size; });
+  box.querySelector('.rinfo').textContent = files.length === 1
+    ? '✅ Ready: ' + files[0].name + ' (' + fmtKB(files[0].blob.size) + ')'
+    : '✅ Ready: ' + files.length + ' files (' + fmtKB(total) + ' total)';
+  box.style.display = 'block';
+  setStatus(tool, (detail ? detail + ' ' : '') + 'Tap Download to save.', true);
+}
+async function doDownload(tool){
+  var files = pendingResults[tool];
+  if (!files || !files.length) return;
+  var box = resultBox(tool);
+  var btn = box ? box.querySelector('button') : null;
+  if (btn) btn.disabled = true;
+  if (files.length === 1){
+    window.__ltqrAutoOpenNext = true;
+    download(files[0].blob, files[0].name);
+    setStatus(tool, 'Saved: ' + files[0].name, true);
+  } else {
+    window.__ltqrAutoOpenNext = false;
+    for (var i = 0; i < files.length; i++){
+      setStatus(tool, 'Saving file ' + (i + 1) + ' of ' + files.length + '…');
+      download(files[i].blob, files[i].name);
+      if (i < files.length - 1) await sleep(350);
+    }
+    setStatus(tool, 'Saved ' + files.length + ' file(s).', true);
+  }
+  if (btn) btn.disabled = false;
+}
+window.__ltqrTwoStep = { pending: pendingResults, setResult: setResult, doDownload: doDownload, hideResult: hideResult };
+function parseRanges(text, pageCount){
+  var out=[]; var parts=String(text).split(',').map(function(s){return s.trim();}).filter(Boolean);
+  if(!parts.length) throw new Error('Please type which pages, e.g. 2 or 1,3-5.');
+  for(var i=0;i<parts.length;i++){
+    var m=parts[i].match(/^(\d+)\s*-\s*(\d+)$/);
+    if(m){ var a=+m[1], b=+m[2]; if(a>b) throw new Error('Bad range "'+parts[i]+'" — start must be smaller.'); for(var p=a;p<=b;p++) out.push(p); }
+    else if(/^\d+$/.test(parts[i])) out.push(+parts[i]);
+    else throw new Error('"'+parts[i]+'" is not a page number or range.');
+  }
+  var seen={}, res=[];
+  out.forEach(function(p){ if(p<1||p>pageCount) throw new Error('Page '+p+' does not exist — this PDF has '+pageCount+' page(s).'); if(!seen[p]){ seen[p]=1; res.push(p-1); } });
+  res.sort(function(a,b){ return a-b; }); return res;
+}
+/* Opens a PDF with pdf.js for the picked state, asking in-page when the
+   file is locked and remembering the working password on the state. */
+async function pdfJsDoc(state){
+  var pw = state.password || undefined;
+  for (var attempt = 0; attempt < 3; attempt++) {
+    try { return await pdfjsLib.getDocument({ data: state.bytes.slice(), password: pw }).promise; }
+    catch (e) {
+      if (e && e.name === 'PasswordException') {
+        var ask = await window.ltqrAskPassword(state.file ? state.file.name : '', attempt > 0 || !!pw);
+        if (ask === null || ask === '') throw new Error((attempt > 0 || pw) ? 'Wrong password for this PDF. Please try again.' : 'This PDF needs a password to open.');
+        pw = ask; state.password = ask; continue;
+      }
+      throw e;
+    }
+  }
+  throw new Error('Wrong password for this PDF. Please try again.');
+}
+async function renderPagesToJpeg(state, scale, quality, tool, label){
+  var pdf = await pdfJsDoc(state); var blobs=[];
+  for(var i=1;i<=pdf.numPages;i++){
+    setStatus(tool, '<span class="spin"></span> '+label+' — page '+i+' of '+pdf.numPages+'…');
+    var page = await pdf.getPage(i);
+    var vp = page.getViewport({ scale: scale });
+    var canvas = document.createElement('canvas');
+    canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    var blob = await new Promise(function(res){ canvas.toBlob(res,'image/jpeg',quality); });
+    if(!blob) throw new Error('Could not process page '+i+'.');
+    var unit = page.getViewport({ scale: 1 });
+    blobs.push({ blob: blob, w: unit.width, h: unit.height });
+    page.cleanup();
+  }
+  await pdf.destroy(); return blobs;
+}
+async function buildPdfFromJpegs(blobs){
+  var out = await PDFLib.PDFDocument.create();
+  for(var i=0;i<blobs.length;i++){
+    var img = await out.embedJpg(new Uint8Array(await blobs[i].blob.arrayBuffer()));
+    var page = out.addPage([blobs[i].w, blobs[i].h]);
+    page.drawImage(img, { x:0, y:0, width:blobs[i].w, height:blobs[i].h });
+  }
+  return out.save();
+}
+
+/* Shared external state from the picker script block */
+function state(tool){ return window.__picked ? window.__picked[tool] : null; }
+
+/* NOTE: the picker block exposes its state through window.__picked below. */
+
+var runners = {
+
+  /* ----- PDF to JPG/PNG ----- */
+  toimg: async function(){
+    var st = state('toimg'); if(!st) throw new Error('Please choose a PDF file first.');
+    var fmt = $('#toimg-format').value;
+    var scale = parseFloat($('#toimg-scale').value);
+    var thumbs = $('.thumbs', panelEl('toimg')); thumbs.innerHTML='';
+    var pdf = await pdfJsDoc(st);
+    var numPages = pdf.numPages;
+    var made = [];
+    for(var i=1;i<=numPages;i++){
+      setStatus('toimg','<span class="spin"></span> Converting page '+i+' of '+numPages+'…');
+      var page = await pdf.getPage(i);
+      var vp = page.getViewport({ scale: scale });
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
+      var ctx = canvas.getContext('2d');
+      if(fmt === 'jpeg'){ ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); }
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      var mime = fmt === 'jpeg' ? 'image/jpeg' : 'image/png';
+      var ext = fmt === 'jpeg' ? 'jpg' : 'png';
+      var blob = await new Promise(function(res){ canvas.toBlob(res, mime, 0.92); });
+      if(!blob) throw new Error('Could not convert page '+i+'.');
+      var img = document.createElement('img'); img.src = URL.createObjectURL(blob); img.alt = 'Page '+i;
+      thumbs.appendChild(img);
+      made.push({ blob: blob, name: baseName(st.file.name)+'-page-'+i+'.'+ext });
+      page.cleanup();
+    }
+    await pdf.destroy();
+    setResult('toimg', made, 'Done — '+numPages+' image(s) converted.');
+  },
+
+  /* ----- Merge ----- */
+  merge: async function(){
+    var files = window.__mergeFiles || [];
+    if(files.length < 2) throw new Error('Please add at least 2 PDF files to merge.');
+    var out = await PDFLib.PDFDocument.create();
+    for(var i=0;i<files.length;i++){
+      setStatus('merge','<span class="spin"></span> Merging file '+(i+1)+' of '+files.length+'…');
+      var holder = { password: files[i].password || null, fileName: files[i].name };
+      var src = await window.ltqrLoadWithPassword(files[i].bytes.slice(), holder.password, holder);
+      if(holder.password) files[i].password = holder.password;
+      var pages = await out.copyPages(src, src.getPageIndices());
+      pages.forEach(function(p){ out.addPage(p); });
+    }
+    var bytes = await out.save();
+    setResult('merge', [{ blob: new Blob([bytes], {type:'application/pdf'}), name: 'merged.pdf' }],
+      'Done — merged.pdf made ('+out.getPageCount()+' pages, '+fmtKB(bytes.length)+').');
+  },
+
+  /* ----- Split ----- */
+  split: async function(){
+    var st = state('split'); if(!st) throw new Error('Please choose a PDF file first.');
+    var src = await window.ltqrLoadLib(st);
+    var n = src.getPageCount();
+    var madeFiles = [];
+    for(var i=0;i<n;i++){
+      setStatus('split','<span class="spin"></span> Splitting — page '+(i+1)+' of '+n+'…');
+      var out = await PDFLib.PDFDocument.create();
+      var copied = await out.copyPages(src, [i]);
+      out.addPage(copied[0]);
+      madeFiles.push({ blob: new Blob([await out.save()], {type:'application/pdf'}),
+                       name: baseName(st.file.name)+'-page-'+(i+1)+'.pdf' });
+    }
+    setResult('split', madeFiles, 'Done — split into '+n+' separate PDF(s).');
+  },
+
+  /* ----- Delete pages ----- */
+  delpage: async function(){
+    var st = state('delpage'); if(!st) throw new Error('Please choose a PDF file first.');
+    var doc = await window.ltqrLoadLib(st);
+    var total = doc.getPageCount();
+    var kill = parseRanges($('#del-pages').value, total);
+    if(kill.length >= total) throw new Error('That would delete every page. Keep at least one page.');
+    for(var i=kill.length-1;i>=0;i--) doc.removePage(kill[i]);
+    var bytes = await doc.save();
+    setResult('delpage', [{ blob: new Blob([bytes], {type:'application/pdf'}), name: baseName(st.file.name)+'-edited.pdf' }],
+      'Done — '+kill.length+' page(s) removed, '+doc.getPageCount()+' left.');
+  },
+
+  /* ----- Extract pages ----- */
+  extract: async function(){
+    var st = state('extract'); if(!st) throw new Error('Please choose a PDF file first.');
+    var src = await window.ltqrLoadLib(st);
+    var keep = parseRanges($('#ext-pages').value, src.getPageCount());
+    var out = await PDFLib.PDFDocument.create();
+    var copied = await out.copyPages(src, keep);
+    copied.forEach(function(p){ out.addPage(p); });
+    var exBytes = await out.save();
+    setResult('extract', [{ blob: new Blob([exBytes], {type:'application/pdf'}), name: baseName(st.file.name)+'-extracted.pdf' }],
+      'Done — '+keep.length+' page(s) extracted.');
+  },
+
+  /* ----- Rotate ----- */
+  rotate: async function(){
+    var st = state('rotate'); if(!st) throw new Error('Please choose a PDF file first.');
+    var doc = await window.ltqrLoadLib(st);
+    var total = doc.getPageCount();
+    var txt = $('#rot-pages').value.trim();
+    var idx = txt ? parseRanges(txt, total) : doc.getPageIndices();
+    var add = parseInt($('#rot-angle').value, 10);
+    idx.forEach(function(i){
+      var page = doc.getPage(i);
+      var cur = page.getRotation().angle || 0;
+      page.setRotation(PDFLib.degrees((cur + add) % 360));
+    });
+    var rotBytes = await doc.save();
+    setResult('rotate', [{ blob: new Blob([rotBytes], {type:'application/pdf'}), name: baseName(st.file.name)+'-rotated.pdf' }],
+      'Done — '+idx.length+' page(s) rotated.');
+  },
+
+  /* ----- Watermark ----- */
+  watermark: async function(){
+    var st = state('watermark'); if(!st) throw new Error('Please choose a PDF file first.');
+    var text = $('#wm-text').value.trim();
+    if(!text) throw new Error('Please type the watermark text.');
+    var opacity = parseFloat($('#wm-opacity').value);
+    var doc = await window.ltqrLoadLib(st);
+    var font = await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    doc.getPages().forEach(function(page){
+      var size = page.getSize();
+      var fontSize = Math.max(28, Math.min(size.width, size.height) / 9);
+      var tw = font.widthOfTextAtSize(text, fontSize);
+      page.drawText(text, {
+        x: (size.width - tw) / 2, y: size.height / 2,
+        size: fontSize, font: font,
+        color: PDFLib.rgb(0.45, 0.45, 0.45), opacity: opacity,
+        rotate: PDFLib.degrees(35)
+      });
+    });
+    var wmBytes = await doc.save();
+    setResult('watermark', [{ blob: new Blob([wmBytes], {type:'application/pdf'}), name: baseName(st.file.name)+'-watermarked.pdf' }],
+      'Done — watermark added to '+doc.getPageCount()+' page(s).');
+  },
+
+  /* ----- Compress ----- */
+  compress: async function(){
+    var st = state('compress'); if(!st) throw new Error('Please choose a PDF file first.');
+    var level = $('#cmp-level').value;
+    var cfg = level === 'light' ? { scale: 1.7, q: 0.82 } : level === 'strong' ? { scale: 1.0, q: 0.55 } : { scale: 1.35, q: 0.7 };
+    var blobs = await renderPagesToJpeg(st, cfg.scale, cfg.q, 'compress', 'Compressing');
+    var bytes = await buildPdfFromJpegs(blobs);
+    var msg = 'Done — '+fmtKB(st.bytes.length)+' → '+fmtKB(bytes.length)+'.';
+    if(bytes.length >= st.bytes.length) msg = 'Done — this PDF was already small; the result ('+fmtKB(bytes.length)+') is not smaller than the original ('+fmtKB(st.bytes.length)+'). Ready anyway.';
+    setResult('compress', [{ blob: new Blob([bytes], {type:'application/pdf'}), name: baseName(st.file.name)+'-compressed.pdf' }], msg);
+  },
+
+  /* ----- Target KB ----- */
+  target: async function(){
+    var st = state('target'); if(!st) throw new Error('Please choose a PDF file first.');
+    var kb = parseInt($('#tgt-kb').value, 10);
+    if(!kb || kb < 20) throw new Error('Please enter a target of at least 20 KB.');
+    var targetBytes = kb * 1024;
+    if(st.bytes.length <= targetBytes){
+      setStatus('target', 'This PDF is already '+fmtKB(st.bytes.length)+' — under your '+kb+' KB target. Nothing to do.', true);
+      return;
+    }
+    var attempts = [
+      { scale: 2.0, q: 0.85 }, { scale: 1.6, q: 0.8 }, { scale: 1.4, q: 0.72 },
+      { scale: 1.2, q: 0.65 }, { scale: 1.0, q: 0.6 }, { scale: 0.85, q: 0.55 },
+      { scale: 0.7, q: 0.5 }, { scale: 0.55, q: 0.45 }, { scale: 0.45, q: 0.4 }
+    ];
+    var best = null, bestOver = null;
+    for(var i=0;i<attempts.length;i++){
+      var a = attempts[i];
+      var blobs = await renderPagesToJpeg(st, a.scale, a.q, 'target', 'Trying size '+ (i+1));
+      var bytes = await buildPdfFromJpegs(blobs);
+      if(bytes.length <= targetBytes){ best = bytes; break; }
+      if(!bestOver || bytes.length < bestOver.length) bestOver = bytes;
+    }
+    if(best){
+      setResult('target', [{ blob: new Blob([best], {type:'application/pdf'}), name: baseName(st.file.name)+'-'+kb+'kb.pdf' }],
+        'Done — '+fmtKB(st.bytes.length)+' → '+fmtKB(best.length)+', under your '+kb+' KB target.');
+    } else {
+      setResult('target', [{ blob: new Blob([bestOver], {type:'application/pdf'}), name: baseName(st.file.name)+'-smallest.pdf' }],
+        'Closest possible: '+fmtKB(bestOver.length)+' — still above '+kb+' KB, because this PDF has too much detail for that size. The smallest version is ready.');
+    }
+  },
+
+  /* ----- Lock (real AES-256 encryption via @cantoo/pdf-lib) ----- */
+  lock: async function(){
+    var st = state('lock'); if(!st) throw new Error('Please choose a PDF file first.');
+    var pw = $('#lock-pw').value, pw2 = $('#lock-pw2').value;
+    if(!pw) throw new Error('Please type a password.');
+    if(pw !== pw2) throw new Error('The two passwords do not match.');
+    var doc = await window.ltqrLoadLib(st);
+    doc.encrypt({ userPassword: pw, ownerPassword: pw });
+    var bytes = await doc.save();
+    setResult('lock', [{ blob: new Blob([bytes], {type:'application/pdf'}), name: baseName(st.file.name)+'-locked.pdf' }],
+      'Done — password lock added. The file will ask for your password to open.');
+  },
+
+  /* ----- Unlock -----
+     The bundled pdf-lib (@cantoo fork) decrypts in memory once the right
+     password is given — typed in the field, remembered from picking the
+     file, or asked in-page by the shared loader. The pages are then copied
+     into a fresh document, so the saved file carries no encryption at all. */
+  unlock: async function(){
+    var st = state('unlock'); if(!st) throw new Error('Please choose a PDF file first.');
+    var probe = null;
+    try { probe = await PDFLib.PDFDocument.load(st.bytes.slice(), { ignoreEncryption: true }); } catch(_){}
+    if(probe && !probe.isEncrypted){
+      setStatus('unlock', 'This PDF is not locked — no password to remove.', true);
+      return;
+    }
+    var pwField = $('#unlock-pw').value;
+    var holder = { password: pwField || st.password || null, fileName: st.file.name };
+    var doc;
+    try { doc = await window.ltqrLoadWithPassword(st.bytes.slice(), holder.password, holder); }
+    catch(e){ throw new Error(/Wrong password/.test(e.message) ? 'Wrong password — the PDF could not be unlocked.' : e.message); }
+    if(holder.password) st.password = holder.password;
+    /* Rebuild into a fresh document so no encryption dictionary carries over. */
+    var out = await PDFLib.PDFDocument.create();
+    var copied = await out.copyPages(doc, doc.getPageIndices());
+    copied.forEach(function(p){ out.addPage(p); });
+    var unBytes = await out.save();
+    setResult('unlock', [{ blob: new Blob([unBytes], {type:'application/pdf'}), name: baseName(st.file.name)+'-unlocked.pdf' }],
+      'Done — password removed.');
+  }
+};
+
+/* Wire the run buttons */
+Object.keys(runners).forEach(function(tool){
+  var btn = document.querySelector('[data-run="'+tool+'"]');
+  if(!btn) return;
+  btn.addEventListener('click', async function(){
+    setError(tool, ''); setStatus(tool, '');
+    hideResult(tool);
+    setBusy(tool, true);
+    try { await runners[tool](); }
+    catch(e){ setStatus(tool, ''); setError(tool, e.message || 'Something went wrong. Please try again.'); }
+    setBusy(tool, false);
+  });
+});
+})();
+</script>
+
+<style>
+#ltqr-pw-overlay{position:fixed;inset:0;z-index:200;background:rgba(2,8,20,.72);display:none;align-items:center;justify-content:center;padding:20px}
+#ltqr-pw-overlay.open{display:flex}
+#ltqr-pw-card{background:#121A28;border:1px solid #263449;border-radius:16px;padding:20px;max-width:340px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.6);font-family:system-ui,sans-serif;color:#EDF1F0}
+#ltqr-pw-card h3{margin:0 0 6px;font-size:17px}
+#ltqr-pw-card p{margin:0 0 12px;font-size:13.5px;color:#9AA5A0}
+#ltqr-pw-card .wrong{color:#F2A0A0}
+#ltqr-pw-input{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #263449;background:#0A0F18;color:#fff;font-size:15px}
+#ltqr-pw-row{display:flex;gap:10px;margin-top:14px}
+#ltqr-pw-open{flex:1;background:#2F7CF6;color:#fff;border:0;border-radius:10px;padding:12px;font-weight:700;font-size:15px;cursor:pointer}
+#ltqr-pw-cancel{background:#1A2436;color:#EDF1F0;border:1px solid #263449;border-radius:10px;padding:12px 16px;font-weight:600;cursor:pointer}
+</style>
+<div id="ltqr-pw-overlay" role="dialog" aria-modal="true" aria-label="PDF password">
+  <div id="ltqr-pw-card">
+    <h3>🔒 This PDF is locked</h3>
+    <p id="ltqr-pw-name"></p>
+    <p class="wrong" id="ltqr-pw-note" style="display:none">That password was wrong — please try again.</p>
+    <input type="password" id="ltqr-pw-input" placeholder="PDF password" autocomplete="off">
+    <div id="ltqr-pw-row">
+      <button type="button" id="ltqr-pw-open">Open PDF</button>
+      <button type="button" id="ltqr-pw-cancel">Cancel</button>
+    </div>
+    <p style="margin-top:12px">The password is used only to open the file. It is never saved anywhere.</p>
+  </div>
+</div>
+<style>
+body{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:90;display:flex;align-items:flex-end;background:#121A28;border-top:1px solid #263449;box-shadow:0 -10px 30px rgba(0,0,0,.5);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.bnav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;color:#9CA3AF;text-decoration:none;font-size:10.5px;font-weight:600;border-radius:12px;font-family:system-ui,sans-serif}
+.bnav a .bi{font-size:21px;line-height:1.15}
+.bnav a.on{color:#3B82F6}
+.bnav a.bnav-scan .bi{display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#38BDF8,#2563EB);font-size:25px;margin-top:-27px;box-shadow:0 10px 22px rgba(37,99,235,.5);border:3px solid #0A0F18}
+.bnav a.bnav-scan.on{color:#7DD3FC}
+</style>
+<nav class="bnav" aria-label="Main">
+  <a href="/" data-nav="home"><span class="bi">🏠</span>Home</a>
+  <a href="/tools.html" data-nav="tools"><span class="bi">🧰</span>All Tools</a>
+  <a href="/tools/scanner.html" class="bnav-scan" data-nav="scan"><span class="bi">📷</span>Scan</a>
+  <a href="/#history" data-nav="history"><span class="bi">🕘</span>History</a>
+  <a href="/settings.html" data-nav="settings"><span class="bi">⚙️</span>Settings</a>
+</nav>
+
+<script>
+/* Scanner "Edit PDF" handoff: scanner.html stores the document's PDF in
+   IndexedDB ('ltqr-scans' / 'handoff' / 'editpdf') and lands here with
+   ?handoff=1 — load it into the Merge tool so the user can keep editing. */
+(function(){
+  if (!/[?&]handoff=1/.test(location.search || '')) return;
+  function openDb(){
+    return new Promise(function(resolve){
+      try {
+        var req = indexedDB.open('ltqr-scans', 1);
+        req.onsuccess = function(){ resolve(req.result); };
+        req.onerror = function(){ resolve(null); };
+      } catch(e){ resolve(null); }
+    });
+  }
+  openDb().then(function(db){
+    if (!db) return;
+    var tx = db.transaction('handoff', 'readonly');
+    var get = tx.objectStore('handoff').get('editpdf');
+    get.onsuccess = function(){
+      var rec = get.result;
+      if (!rec || !rec.blob) return;
+      var btn = document.querySelector('.toolbtn[data-tool="merge"]');
+      if (btn) btn.click();
+      var input = document.querySelector('#panel-merge [data-pick-multi]');
+      if (!input) return;
+      var file = new File([rec.blob], rec.name || 'scan.pdf', { type: 'application/pdf' });
+      var dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+  });
+})();
+</script>
+
+</body>
+</html>

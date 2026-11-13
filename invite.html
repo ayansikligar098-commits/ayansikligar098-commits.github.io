@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Invite &amp; Earn — Link To QR</title>
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body class="site">
+<div id="siteHeader"></div>
+
+<div class="wrap">
+  <h1 style="font-size:24px;margin:10px 0 2px">🎁 Invite &amp; Earn</h1>
+  <p class="muted" style="margin:0">Share your code or link. When a friend joins and applies it, <b>they get 3 days of Premium free</b> and <b>you get 6 days free</b> — automatic and instant, no waiting.</p>
+
+  <div class="card hidden" id="guestCard">
+    <h2>Login first</h2>
+    <p class="muted">Your refer code is attached to your account, so please login (or create an account) first.</p>
+    <a class="btn big" href="/login.html">Go to Login</a>
+  </div>
+
+  <div id="mainBox" class="hidden">
+    <div class="card">
+      <h2>Your Refer Code</h2>
+      <div id="myCode" style="font-size:30px;font-weight:800;letter-spacing:3px;color:#7FB2FF">…</div>
+      <div class="rowflex" style="margin-top:10px">
+        <button class="btn" id="copyCodeBtn" type="button">Copy Code</button>
+      </div>
+      <div class="msg" id="codeMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Your Refer Link</h2>
+      <div id="myLink" style="font-size:13.5px;word-break:break-all;color:#B9CBE8">…</div>
+      <div class="rowflex" style="margin-top:10px">
+        <button class="btn" id="copyLinkBtn" type="button">Copy Link</button>
+        <button class="btn ghost" id="shareBtn" type="button">Share</button>
+      </div>
+      <div class="rowflex hidden" id="shareRow" style="margin-top:8px">
+        <a class="btn ghost" id="waShare" target="_blank" rel="noopener">WhatsApp</a>
+        <a class="btn ghost" id="tgShare" target="_blank" rel="noopener">Telegram</a>
+      </div>
+      <div class="msg" id="linkMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Your Earnings</h2>
+      <p style="margin:4px 0">Friends joined: <b id="statCount">0</b></p>
+      <p style="margin:4px 0">Premium days earned: <b id="statDays">0</b></p>
+      <div id="friendsBox"><p class="muted">No friends have joined with your code yet.</p></div>
+    </div>
+
+    <div class="card" id="redeemCard">
+      <h2>Have a friend's code?</h2>
+      <p class="muted">Enter it once and get <b id="daysNewLine">3 days of Premium free</b>, instantly. Decisions are automatic — the system checks and approves or rejects right away.</p>
+      <div class="rowflex">
+        <input type="text" id="codeInput" placeholder="Friend's refer code" style="text-transform:uppercase" maxlength="12">
+        <button class="btn" id="redeemBtn" type="button" style="flex:0 0 auto">Get My Free Days</button>
+      </div>
+      <div class="rowflex" style="margin-top:6px">
+        <button class="btn ghost hidden" id="dismissPendingBtn" type="button">Not now</button>
+      </div>
+      <div class="msg" id="redeemMsg"></div>
+      <p class="muted" style="font-size:12.5px">Think a rejection was a mistake? The admin can review it — open a ticket from <a href="/support.html?cat=refer">Support</a>.</p>
+    </div>
+
+    <div class="card hidden" id="redeemedCard">
+      <h2>🎉 Refer code applied</h2>
+      <p class="muted" id="redeemedLine">You already used a friend's refer code. Each account can use one code only once.</p>
+    </div>
+
+    <div class="card">
+      <h2>How it works</h2>
+      <p class="muted" style="margin:4px 0">1. Share your code or link with a friend.</p>
+      <p class="muted" style="margin:4px 0">2. Your friend creates an account and applies your code — they get <b>3 days</b> of Premium free.</p>
+      <p class="muted" style="margin:4px 0">3. You get <b>6 days</b> of Premium free for every friend who joins.</p>
+      <p class="muted" style="margin:4px 0">Refer code sirf naye account par chalta hai (pehle 7 din mein). One code use per account and per phone — fake or duplicate accounts do not count.</p>
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <span>© Link To QR</span><a href="/privacy.html">Privacy Policy</a><a href="/terms.html">Terms &amp; Conditions</a><a href="/">Tools</a>
+</footer>
+
+<script type="module" src="/js/header.js"></script>
+<script type="module">
+import {
+  auth, db, onAuthStateChanged, doc, getDoc, setDoc, addDoc, collection,
+  query, where, limit, getDocs, serverTimestamp, writeBatch, updateDoc,
+  loadConfig, loadProfile, fmtDate, esc
+} from "/js/fb.js";
+
+const $ = id => document.getElementById(id);
+const LINK_BASE = "https://ayansikligar098-commits.github.io";
+const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const REF_MSG = {
+  "REF-01": "This refer code was not found. Check the code and try again.",
+  "REF-02": "You have already used a refer code. Each account can use one code only once.",
+  "REF-03": "This is your own refer code. Share it with a friend instead!",
+  "REF-04": "This code belongs to an account used on this same phone, so it cannot be applied here.",
+  "REF-05": "Refer codes work only on new accounts (within the first 7 days). This account is older than that.",
+  "REF-06": "This refer code is not valid anymore.",
+  "REF-07": "A refer code has already been used on this phone. One phone can apply a code only once.",
+  "REF-08": "Refer system is being activated. Please try again a little later.",
+  "REF-09": "This looks like a cloned / dual app, so the code cannot be applied here. Please use the normal app.",
+  "REF-00": "Something went wrong. Please try again."
+};
+let me = null, cfg = {}, myCode = "", myLink = "", deviceHash = "";
+
+function daysNew() { const n = Number(cfg.referDaysNew); return (isFinite(n) && n >= 0 && n <= 30) ? Math.floor(n) : 3; }
+function daysInviter() { const n = Number(cfg.referDaysInviter); return (isFinite(n) && n >= 0 && n <= 30) ? Math.floor(n) : 6; }
+
+function webDeviceHash() {
+  try {
+    let h = localStorage.getItem("ltqrDeviceHash");
+    if (!h || h.length < 32) {
+      const a = new Uint8Array(20); crypto.getRandomValues(a);
+      h = Array.from(a, b => b.toString(16).padStart(2, "0")).join("");
+      localStorage.setItem("ltqrDeviceHash", h);
+    }
+    return h;
+  } catch (e) { return ""; }
+}
+async function myIp() {
+  try {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 3000);
+    const r = await fetch("https://api.ipify.org?format=json", { signal: ctl.signal });
+    clearTimeout(t);
+    const j = await r.json();
+    return (j && j.ip) ? String(j.ip) : "";
+  } catch (e) { return ""; }
+}
+async function codeFor(uid, attempt) {
+  const seed = "ltqr-ref:" + uid + (attempt > 0 ? ":" + attempt : "");
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(seed));
+  const bytes = new Uint8Array(buf);
+  let out = "";
+  for (let i = 0; i < 7; i++) out += ALPHABET[bytes[i] & 31];
+  return out;
+}
+function tsMillis(v) {
+  if (!v) return 0;
+  if (typeof v.toMillis === "function") return v.toMillis();
+  if (typeof v === "number") return v;
+  return 0;
+}
+function extendedUntil(existingMs, days, now) {
+  const base = Math.max(now, existingMs || 0);
+  return new Date(base + days * 86400000);
+}
+
+async function ensureProfile(user, profile) {
+  deviceHash = webDeviceHash();
+  const patch = { lastDeviceHash: deviceHash, lastSeenAt: serverTimestamp() };
+  const ip = await myIp();
+  if (ip) patch.lastIp = ip;
+  let code = profile && profile.referCode ? String(profile.referCode) : "";
+  if (!code) {
+    for (let a = 0; a < 5 && !code; a++) {
+      const cand = await codeFor(user.uid, a);
+      const idx = await getDoc(doc(db, "referCodes", cand));
+      if (!idx.exists() || (idx.data() && idx.data().uid === user.uid)) code = cand;
+    }
+    if (code) patch.referCode = code;
+  }
+  if (code) {
+    try { await setDoc(doc(db, "referCodes", code),
+      { uid: user.uid, deviceIdHash: deviceHash }, { merge: true }); } catch (e) {}
+  }
+  try { await updateDoc(doc(db, "users", user.uid), patch); }
+  catch (e) { try { await setDoc(doc(db, "users", user.uid), patch, { merge: true }); } catch (e2) {} }
+  return code;
+}
+
+async function logAttempt(code, result, reason, cloneSignal) {
+  try {
+    const f = {
+      uid: me.uid, email: me.email || "", code: code || "",
+      deviceIdHash: deviceHash, result: result, reason: reason || "",
+      redeemIp: await myIp(), createdAt: serverTimestamp()
+    };
+    if (cloneSignal) f.cloneSignal = cloneSignal;
+    await addDoc(collection(db, "referAttempts"), f);
+  } catch (e) {}
+}
+
+async function loadFriends() {
+  try {
+    const q = query(collection(db, "referrals"), where("inviterUid", "==", me.uid), limit(100));
+    const snap = await getDocs(q);
+    const list = [];
+    snap.forEach(d => {
+      const r = d.data();
+      if (r.status === "success" || r.status === "admin-approved") list.push(r);
+    });
+    list.sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
+    $("statCount").textContent = list.length;
+    $("statDays").textContent = list.length * daysInviter();
+    $("friendsBox").innerHTML = list.length
+      ? list.map(r => `<p style="margin:3px 0">👤 <b>${esc(r.redeemerName || r.redeemerEmail || "A friend")}</b> <span class="muted">— joined ${esc(fmtDate(r.createdAt))}</span></p>`).join("")
+      : '<p class="muted">No friends have joined with your code yet.</p>';
+  } catch (e) {}
+}
+
+async function redeem(rawCode) {
+  const m = $("redeemMsg"), b = $("redeemBtn");
+  const code = (rawCode || "").trim().toUpperCase();
+  const fail = (rc) => { logAttempt(code, "rejected", rc); m.textContent = (REF_MSG[rc] || REF_MSG["REF-00"]) + " [" + rc + "]"; m.className = "msg err"; b.disabled = false; };
+  if (!code) { m.textContent = "Type a refer code first."; m.className = "msg warn"; return; }
+  b.disabled = true; m.textContent = "Checking the code…"; m.className = "msg";
+  try {
+    const mySnap = await getDoc(doc(db, "users", me.uid));
+    const myData = mySnap.exists() ? mySnap.data() : {};
+    if (myData.referralRedeemed === true) return fail("REF-02");
+    const created = tsMillis(myData.createdAt);
+    if (!created || Date.now() - created > 7 * 86400000) return fail("REF-05");
+    const idxSnap = await getDoc(doc(db, "referCodes", code));
+    if (!idxSnap.exists()) return fail("REF-01");
+    const inviterUid = idxSnap.data().uid;
+    if (!inviterUid) return fail("REF-01");
+    if (inviterUid === me.uid) return fail("REF-03");
+    if (deviceHash && idxSnap.data().deviceIdHash && idxSnap.data().deviceIdHash === deviceHash) return fail("REF-04");
+    const invSnap = await getDoc(doc(db, "users", inviterUid));
+    const invData = invSnap.exists() ? invSnap.data() : null;
+    if (!invData) return fail("REF-01");
+    if (invData.banned === true) return fail("REF-06");
+    if (deviceHash) {
+      const lockSnap = await getDoc(doc(db, "referDevices", deviceHash));
+      if (lockSnap.exists()) return fail("REF-07");
+    }
+    const dn = daysNew(), di = daysInviter(), now = Date.now(), ip = await myIp();
+    const batch = writeBatch(db);
+    batch.set(doc(db, "referrals", me.uid), {
+      code: code, status: "success",
+      redeemerUid: me.uid, redeemerEmail: me.email || "", redeemerName: me.displayName || "",
+      inviterUid: inviterUid, inviterEmail: invData.email || "", inviterName: invData.name || "",
+      deviceIdHash: deviceHash, deviceIdSource: "web",
+      daysNew: dn, daysInviter: di,
+      redeemIp: ip, inviterIp: invData.lastIp || "",
+      createdAt: serverTimestamp()
+    });
+    const myPatch = {
+      premium: true, premiumUntil: extendedUntil(tsMillis(myData.premiumUntil), dn, now),
+      referralRedeemed: true, referredBy: inviterUid
+    };
+    if (myData.referCode) myPatch.referCode = myData.referCode;
+    batch.update(doc(db, "users", me.uid), myPatch);
+    if (di > 0) {
+      batch.update(doc(db, "users", inviterUid), {
+        premium: true,
+        premiumUntil: extendedUntil(tsMillis(invData.premiumUntil), di, now),
+        referralCount: (Number(invData.referralCount) || 0) + 1
+      });
+    }
+    if (deviceHash) {
+      batch.set(doc(db, "referDevices", deviceHash), {
+        redeemerUid: me.uid, code: code, createdAt: serverTimestamp()
+      });
+    }
+    await batch.commit();
+    await logAttempt(code, "success", "");
+    try { localStorage.removeItem("ltqrRef"); } catch (e) {}
+    m.textContent = "🎉 Done! " + dn + " days of Premium added to your account.";
+    m.className = "msg ok";
+    $("redeemCard").classList.add("hidden");
+    $("redeemedCard").classList.remove("hidden");
+  } catch (e) {
+    const code2 = (e && e.code) || "";
+    if (code2.indexOf("permission-denied") >= 0) return fail("REF-08");
+    if (code2.indexOf("already-exists") >= 0 || code2.indexOf("failed-precondition") >= 0) return fail("REF-07");
+    return fail("REF-00");
+  }
+  b.disabled = false;
+}
+
+onAuthStateChanged(auth, async user => {
+  me = user;
+  $("guestCard").classList.toggle("hidden", !!user);
+  if (!user) { $("mainBox").classList.add("hidden"); return; }
+  cfg = await loadConfig();
+  const profile = await loadProfile(user.uid);
+  myCode = await ensureProfile(user, profile) || (profile && profile.referCode) || "";
+  myLink = myCode ? LINK_BASE + "/?ref=" + myCode : "";
+  $("myCode").textContent = myCode || "—";
+  $("myLink").textContent = myLink || "—";
+  $("daysNewLine").textContent = daysNew() + " days of Premium free";
+  const shareText = "Install Link To QR and use my code " + myCode + " — we both get free Premium days: " + myLink;
+  $("waShare").href = "https://wa.me/?text=" + encodeURIComponent(shareText);
+  $("tgShare").href = "https://t.me/share/url?url=" + encodeURIComponent(myLink) + "&text=" + encodeURIComponent(shareText);
+  const redeemed = profile && profile.referralRedeemed === true;
+  $("redeemCard").classList.toggle("hidden", !!redeemed);
+  $("redeemedCard").classList.toggle("hidden", !redeemed);
+  let pending = "";
+  try { pending = localStorage.getItem("ltqrRef") || ""; } catch (e) {}
+  if (pending && !redeemed) {
+    $("codeInput").value = pending;
+    $("dismissPendingBtn").classList.remove("hidden");
+    $("redeemMsg").textContent = "A friend shared this code with you — tap Get My Free Days to apply it.";
+    $("redeemMsg").className = "msg";
+  }
+  $("mainBox").classList.remove("hidden");
+  loadFriends();
+});
+
+$("copyCodeBtn").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(myCode); $("codeMsg").textContent = "Code copied ✓"; $("codeMsg").className = "msg ok"; } catch (e) {}
+});
+$("copyLinkBtn").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(myLink); $("linkMsg").textContent = "Link copied ✓"; $("linkMsg").className = "msg ok"; } catch (e) {}
+});
+$("shareBtn").addEventListener("click", async () => {
+  const text = "Install Link To QR and use my code " + myCode + " — we both get free Premium days: " + myLink;
+  if (navigator.share) { try { await navigator.share({ title: "Link To QR", text }); return; } catch (e) {} }
+  $("shareRow").classList.toggle("hidden");
+});
+$("redeemBtn").addEventListener("click", () => redeem($("codeInput").value));
+$("dismissPendingBtn").addEventListener("click", () => {
+  try { localStorage.removeItem("ltqrRef"); } catch (e) {}
+  $("codeInput").value = ""; $("dismissPendingBtn").classList.add("hidden");
+  $("redeemMsg").textContent = "";
+});
+</script>
+</body>
+</html>

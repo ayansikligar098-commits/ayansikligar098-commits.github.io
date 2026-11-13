@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — Link To QR</title>
+<link rel="stylesheet" href="/css/site.css">
+<!-- TODO(AdSense): After the owner's Google AdSense account is approved,
+     paste the AdSense script here with HIS publisher ID (ca-pub-XXXX…) and
+     remove this comment. No ID exists yet — do not invent one.
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
+-->
+</head>
+<body class="site">
+<div id="siteHeader"></div>
+
+<div class="wrap" style="max-width:520px">
+  <div class="card">
+    <h2 id="pageTitle">Welcome back</h2>
+    <p class="muted">One account works everywhere — this website and the Link To QR Android app. Your Premium is shared too.</p>
+
+    <div class="tabs" role="tablist">
+      <button id="tabLogin" class="on" type="button">Login</button>
+      <button id="tabSignup" type="button">Create Account</button>
+    </div>
+
+    <!-- LOGIN -->
+    <form id="loginForm" autocomplete="on">
+      <label class="f" for="liEmail">Email</label>
+      <input type="email" id="liEmail" required placeholder="you@example.com" autocomplete="email">
+      <label class="f" for="liPass">Password</label>
+      <input type="password" id="liPass" required placeholder="Your password" autocomplete="current-password">
+      <div style="margin-top:18px"><button class="btn big" style="width:100%;justify-content:center" id="loginBtn" type="submit">Login</button></div>
+      <p style="margin:12px 0 0;text-align:right"><a href="#" id="forgotLink" style="font-size:13px">Forgot password?</a></p>
+    </form>
+
+    <!-- SIGN UP -->
+    <form id="signupForm" class="hidden" autocomplete="on">
+      <label class="f" for="suName">Your name</label>
+      <input type="text" id="suName" required placeholder="Full name" autocomplete="name">
+      <label class="f" for="suEmail">Email</label>
+      <input type="email" id="suEmail" required placeholder="you@example.com" autocomplete="email">
+      <label class="f" for="suPass">Password</label>
+      <input type="password" id="suPass" required minlength="6" placeholder="At least 6 characters" autocomplete="new-password">
+      <div style="margin-top:18px"><button class="btn big" style="width:100%;justify-content:center" id="signupBtn" type="submit">Create Account</button></div>
+      <p class="muted" style="margin-top:10px">We email you a verification link — your account works fully after you tap it (same rule as the app).</p>
+    </form>
+
+    <div class="msg" id="msg"></div>
+
+    <div class="divider">OR</div>
+    <button class="gbtn" id="googleBtn" type="button">
+      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3l5.7-5.7C34.3 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 8 3l5.7-5.7C34.3 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.6l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
+      Continue with Google
+    </button>
+  </div>
+
+  <!-- EMAIL VERIFICATION GATE (same rule as the app) -->
+  <div class="card verify-box hidden" id="verifyCard">
+    <h2>📧 Verify your email</h2>
+    <p class="muted">We sent a verification link to <b id="verifyEmail" style="color:var(--text)"></b>.
+    Tap that link, then come back here and press the button below. Until the email is verified,
+    Premium and account features stay locked — just like in the app.</p>
+    <div class="rowflex">
+      <button class="btn" id="recheckBtn" type="button">I have verified — check now</button>
+      <button class="btn ghost" id="resendBtn" type="button">Resend verification email</button>
+    </div>
+    <div class="msg" id="verifyMsg"></div>
+  </div>
+
+  <p class="muted" style="text-align:center">New here? Tap <b style="color:var(--text)">Create Account</b> above — it takes less than a minute.</p>
+</div>
+
+<footer class="site-footer">
+  <span>© Link To QR</span><a href="/privacy.html">Privacy Policy</a><a href="/terms.html">Terms &amp; Conditions</a><a href="/premium.html">Premium</a>
+</footer>
+
+<script type="module" src="/js/header.js"></script>
+<script type="module">
+import {
+  auth, onAuthStateChanged, signInWithEmailAndPassword,
+  createUserWithEmailAndPassword, sendEmailVerification,
+  sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup,
+  updateProfile, needsEmailVerify, touchProfile, esc
+} from "/js/fb.js";
+
+const $ = id => document.getElementById(id);
+const msg = (t, cls) => { const m = $("msg"); m.textContent = t || ""; m.className = "msg " + (cls || ""); };
+const authErr = e => {
+  const c = (e && e.code) || "";
+  if (c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found")) return "Email or password is wrong. Please check and try again.";
+  if (c.includes("email-already-in-use")) return "This email already has an account. Please Login instead.";
+  if (c.includes("weak-password")) return "Password is too weak — use at least 6 characters.";
+  if (c.includes("invalid-email")) return "That email address does not look right.";
+  if (c.includes("too-many-requests")) return "Too many attempts. Please wait a little and try again.";
+  if (c.includes("popup-closed")) return "Google sign-in was closed before it finished.";
+  if (c.includes("network")) return "Network problem — check your internet and try again.";
+  return "Something went wrong. Please try again.";
+};
+
+function setTab(signup) {
+  $("tabLogin").classList.toggle("on", !signup);
+  $("tabSignup").classList.toggle("on", signup);
+  $("loginForm").classList.toggle("hidden", signup);
+  $("signupForm").classList.toggle("hidden", !signup);
+  $("pageTitle").textContent = signup ? "Create your account" : "Welcome back";
+  msg("");
+}
+$("tabLogin").addEventListener("click", () => setTab(false));
+$("tabSignup").addEventListener("click", () => setTab(true));
+
+$("loginForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const b = $("loginBtn"); b.disabled = true; msg("Signing you in…");
+  try {
+    const cred = await signInWithEmailAndPassword(auth, $("liEmail").value.trim(), $("liPass").value);
+    await touchProfile(cred.user);
+    msg("Logged in ✓", "ok");
+  } catch (err) { msg(authErr(err), "err"); }
+  b.disabled = false;
+});
+
+$("signupForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const b = $("signupBtn"); b.disabled = true; msg("Creating your account…");
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, $("suEmail").value.trim(), $("suPass").value);
+    const name = $("suName").value.trim();
+    if (name) { try { await updateProfile(cred.user, { displayName: name }); } catch (_) {} }
+    await touchProfile(cred.user, name);
+    try { await sendEmailVerification(cred.user); } catch (_) {}
+    msg("Account created ✓ — please verify your email (check your inbox).", "ok");
+    // Came from a refer link? Offer the one-tap apply on the Invite page
+    // (it pre-fills the saved code; the normal redemption checks apply).
+    try {
+      if (localStorage.getItem("ltqrRef")) {
+        msg("Account created ✓ — taking you to apply your friend's refer code…", "ok");
+        setTimeout(() => { location.href = "/invite.html"; }, 1200);
+      }
+    } catch (_) {}
+  } catch (err) { msg(authErr(err), "err"); }
+  b.disabled = false;
+});
+
+$("googleBtn").addEventListener("click", async () => {
+  msg("Opening Google sign-in…");
+  try {
+    const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+    await touchProfile(cred.user);
+    msg("Logged in with Google ✓", "ok");
+  } catch (err) { msg(authErr(err), "err"); }
+});
+
+$("forgotLink").addEventListener("click", async e => {
+  e.preventDefault();
+  const email = $("liEmail").value.trim();
+  if (!email) { msg("Type your email above first, then tap Forgot password.", "warn"); return; }
+  try {
+    await sendPasswordResetEmail(auth, email);
+    msg("Password reset email sent — check your inbox.", "ok");
+  } catch (err) { msg(authErr(err), "err"); }
+});
+
+// Verification gate — shown exactly when the app would show it.
+onAuthStateChanged(auth, user => {
+  const card = $("verifyCard");
+  if (user && needsEmailVerify(user)) {
+    $("verifyEmail").textContent = user.email || "";
+    card.classList.remove("hidden");
+  } else {
+    card.classList.add("hidden");
+    if (user) msg("You are logged in as " + (user.email || "") + " ✓", "ok");
+  }
+});
+
+$("resendBtn").addEventListener("click", async () => {
+  const u = auth.currentUser; if (!u) return;
+  try { await sendEmailVerification(u); $("verifyMsg").textContent = "Verification email sent again."; $("verifyMsg").className = "msg ok"; }
+  catch (e) { $("verifyMsg").textContent = authErr(e); $("verifyMsg").className = "msg err"; }
+});
+$("recheckBtn").addEventListener("click", async () => {
+  const u = auth.currentUser; if (!u) return;
+  await u.reload();
+  if (u.emailVerified) { $("verifyCard").classList.add("hidden"); msg("Email verified ✓ — welcome!", "ok"); }
+  else { $("verifyMsg").textContent = "Not verified yet — tap the link in the email first."; $("verifyMsg").className = "msg warn"; }
+});
+</script>
+</body>
+</html>

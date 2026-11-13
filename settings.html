@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings — Link To QR</title>
+<link rel="stylesheet" href="/css/site.css">
+
+<style>
+  :root{
+    --bg:#0A0F18; --surface:#121A28; --surface2:#1A2436; --line:#263449;
+    --text:#F3F4F6; --muted:#9CA3AF; --primary:#3B82F6; --radius:14px;
+    --shadow:0 10px 28px rgba(0,0,0,.38);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
+  header{padding:16px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,var(--surface2),#101A2C);position:sticky;top:0;z-index:5}
+  header h1{margin:0;font-size:20px;display:flex;align-items:center;gap:12px}
+  header h1::before{content:"⚙️";display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:13px;font-size:22px;background:linear-gradient(135deg,#60A5FA,#1E40AF);box-shadow:0 8px 18px rgba(37,99,235,.4)}
+  header p{margin:6px 0 0 54px;color:var(--muted);font-size:13px}
+  main{max-width:860px;margin:0 auto;padding:16px 14px 60px}
+  .card{background:linear-gradient(180deg,#16202F,#121A28);border:1px solid var(--line);
+    border-radius:18px;padding:17px 16px;margin-bottom:14px;box-shadow:var(--shadow)}
+  .card h2{margin:0 0 4px;font-size:16.5px}
+  .card p{margin:4px 0 0;color:var(--muted);font-size:13.5px;line-height:1.55}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0}
+  .row + .row{border-top:1px solid var(--line)}
+  .row .rt{flex:1;min-width:0}
+  .row .rt b{display:block;font-size:15px}
+  .row .rt small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px;line-height:1.45}
+  .switch{position:relative;width:52px;height:30px;flex:0 0 auto}
+  .switch input{opacity:0;width:0;height:0}
+  .track{position:absolute;inset:0;border-radius:999px;background:#263449;transition:.15s;cursor:pointer}
+  .track::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#EDF1F0;transition:.15s}
+  .switch input:checked + .track{background:var(--primary)}
+  .switch input:checked + .track::after{transform:translateX(22px)}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:12px;border:1px solid var(--line);
+    background:var(--surface2);color:var(--text);font:700 14px system-ui,sans-serif;cursor:pointer;text-decoration:none}
+  .btn.primary{background:var(--primary);color:#FFFFFF;border-color:transparent;box-shadow:0 10px 24px rgba(59,130,246,.25)}
+  .btn.danger{color:#FECDCA;border-color:#7A271A;background:#3A1D1A}
+  .links a{color:var(--primary);text-decoration:none;font-weight:600}
+  .status{font-size:13px;color:var(--primary);min-height:18px;margin-top:8px}
+</style>
+
+</head>
+<body>
+<div id="siteHeader"></div>
+<button type="button" id="ltqrBack" style="display:inline-flex;align-items:center;gap:6px;margin:12px 14px 0;padding:8px 18px;border:1px solid #263449;border-radius:999px;background:#121A28;color:#EDF1F0;font:600 14px system-ui,sans-serif;cursor:pointer">← Back</button>
+<script>
+document.getElementById('ltqrBack').addEventListener('click', function(){
+  try { if (window.history.length > 1) { window.history.back(); return; } } catch(e){}
+  try { window.location.href = '/'; } catch(e){}
+});
+</script>
+<header>
+  <h1>Settings</h1>
+  <p>App preferences on this device.</p>
+</header>
+<main>
+  <section class="card">
+    <h2>Account</h2>
+        <div class="row">
+      <div class="rt"><b>Account</b><small>Login or create your account to sync premium across app and website.</small></div>
+      <a class="btn" href="/login.html">Login</a>
+    </div>
+    <div class="row">
+      <div class="rt"><b>Premium</b><small>See plans and manage your premium.</small></div>
+      <a class="btn primary" href="/premium.html">⭐ Premium</a>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Scanner</h2>
+    <div class="row">
+      <div class="rt"><b>Open links automatically</b><small>When a QR code holds a link, open it right after scanning. Turn OFF to see the link first and open it yourself.</small></div>
+      <label class="switch"><input type="checkbox" id="setAutoOpen"><span class="track"></span></label>
+    </div>
+    <div class="row">
+      <div class="rt"><b>Beep on scan</b><small>A short beep and vibration when a code is read.</small></div>
+      <label class="switch"><input type="checkbox" id="setBeep"><span class="track"></span></label>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Data</h2>
+    <div class="row">
+      <div class="rt"><b>Clear QR history</b><small>Removes the list of QR codes you made (stored on this device).</small></div>
+      <button class="btn danger" id="clearHistory" type="button">Clear</button>
+    </div>
+    <p>Your files, account and premium are not touched by this. App data can also be cleared from Android Settings → Apps → Link To QR → Storage.</p>
+    <div class="status" id="setStatus"></div>
+  </section>
+  <section class="card">
+    <h2>Invite &amp; Support</h2>
+    <div class="row">
+      <div class="rt"><b>🎁 Invite &amp; Earn</b><small>Share your refer code — you get 6 free Premium days per friend, they get 3.</small></div>
+      <a class="btn" href="/invite.html">Open</a>
+    </div>
+    <div class="row">
+      <div class="rt"><b>🛟 Help &amp; Support</b><small>Bug, payment or refer problem? Send a ticket and track the reply.</small></div>
+      <a class="btn" href="/support.html">Open</a>
+    </div>
+  </section>
+  <section class="card">
+    <h2>About</h2>
+    <p><b style="color:var(--text)">Link To QR</b> — Version 1.13</p>
+    <p class="links"><a href="privacy.html">Privacy Policy</a> &nbsp;·&nbsp; <a href="terms.html">Terms &amp; Conditions</a></p>
+  </section>
+</main>
+
+<script>
+// Settings are stored in localStorage on this device only.
+(function(){
+  var t = document.getElementById('setAutoOpen');
+  function load(){ try { t.checked = localStorage.getItem('ltqr_scan_autoopen') !== '0'; } catch(e){ t.checked = true; } }
+  t.addEventListener('change', function(){
+    try { localStorage.setItem('ltqr_scan_autoopen', t.checked ? '1' : '0'); } catch(e){}
+    document.getElementById('setStatus').textContent = t.checked ? 'Auto-open is ON.' : 'Auto-open is OFF - scanned links will wait for your tap.';
+  });
+  load();
+  var b = document.getElementById('setBeep');
+  if (b) {
+    try { b.checked = localStorage.getItem('ltqr_scan_beep') !== '0'; } catch(e){ b.checked = true; }
+    b.addEventListener('change', function(){
+      try { localStorage.setItem('ltqr_scan_beep', b.checked ? '1' : '0'); } catch(e){}
+      document.getElementById('setStatus').textContent = b.checked ? 'Scan beep is ON.' : 'Scan beep is OFF.';
+    });
+  }
+  document.getElementById('clearHistory').addEventListener('click', function(){
+    try { localStorage.removeItem('ltqr_history'); } catch(e){}
+    document.getElementById('setStatus').textContent = 'QR history cleared.';
+  });
+})();
+</script>
+
+
+<style>
+body{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:90;display:flex;align-items:flex-end;background:#121A28;border-top:1px solid #263449;box-shadow:0 -10px 30px rgba(0,0,0,.5);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.bnav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;color:#9CA3AF;text-decoration:none;font-size:10.5px;font-weight:600;border-radius:12px;font-family:system-ui,sans-serif}
+.bnav a .bi{font-size:21px;line-height:1.15}
+.bnav a.on{color:#3B82F6}
+.bnav a.bnav-scan .bi{display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#38BDF8,#2563EB);font-size:25px;margin-top:-27px;box-shadow:0 10px 22px rgba(37,99,235,.5);border:3px solid #0A0F18}
+.bnav a.bnav-scan.on{color:#7DD3FC}
+</style>
+<nav class="bnav" aria-label="Main">
+  <a href="/" data-nav="home"><span class="bi">🏠</span>Home</a>
+  <a href="/tools.html" data-nav="tools"><span class="bi">🧰</span>All Tools</a>
+  <a href="/tools/scanner.html" class="bnav-scan" data-nav="scan"><span class="bi">📷</span>Scan</a>
+  <a href="/#history" data-nav="history"><span class="bi">🕘</span>History</a>
+  <a href="/settings.html" data-nav="settings"><span class="bi">⚙️</span>Settings</a>
+</nav>
+<script>
+(function(){ try {
+  var path = ((window.location && location.pathname) || '').split('/').pop() || '';
+  var map = { '':'home', 'index.html':'home', 'tools.html':'tools', 'scanner.html':'scan', 'pdf-tools.html':'tools', 'image-tools.html':'tools', 'text-edit.html':'tools', 'settings.html':'settings' };
+  var key = map[path];
+  if (key){ var el = document.querySelector('.bnav [data-nav="' + key + '"]'); if (el) el.classList.add('on'); }
+  var h = document.querySelector('.bnav [data-nav="history"]');
+  if (h && (path === '' || path === 'index.html') && typeof openHistory === 'function'){
+    h.addEventListener('click', function(ev){ ev.preventDefault(); openHistory(); });
+  }
+} catch(e){} })();
+</script>
+
+<script type="module" src="/js/header.js"></script>
+</body>
+</html>

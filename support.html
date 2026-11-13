@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Help &amp; Support — Link To QR</title>
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body class="site">
+<div id="siteHeader"></div>
+
+<div class="wrap">
+  <h1 style="font-size:24px;margin:10px 0 2px">🛟 Help &amp; Support</h1>
+  <p class="muted" style="margin:0">Tell us what went wrong — bug, payment, refer, or anything else. The admin reads every ticket and replies here (there are no push notifications, so check <b>My Tickets</b> below for replies).</p>
+
+  <div class="card hidden" id="guestCard">
+    <h2>Login first</h2>
+    <p class="muted">Support tickets are attached to your account, so please login (or create an account) first.</p>
+    <a class="btn big" href="/login.html">Go to Login</a>
+  </div>
+
+  <div id="mainBox" class="hidden">
+    <div class="card">
+      <h2>New ticket</h2>
+      <label class="f" for="catSel">Category</label>
+      <select id="catSel">
+        <option value="bug">🐛 Bug Report</option>
+        <option value="payment">💳 Payment Issue</option>
+        <option value="refer">🎁 Refer Issue</option>
+        <option value="other">💬 Other</option>
+      </select>
+      <label class="f" for="msgInput">Your problem</label>
+      <textarea id="msgInput" rows="4" placeholder="Write what happened, step by step…" style="width:100%"></textarea>
+      <label class="f" for="photoInput">Photo / screenshot (optional)</label>
+      <input type="file" id="photoInput" accept="image/*">
+      <div class="rowflex" style="margin-top:12px">
+        <button class="btn" id="sendBtn" type="button">Send Ticket</button>
+      </div>
+      <div class="msg" id="sendMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>My Tickets</h2>
+      <div id="ticketsBox"><p class="muted">Loading…</p></div>
+    </div>
+
+    <div class="card hidden" id="threadCard">
+      <h2 id="threadTitle">Ticket</h2>
+      <div id="threadBox"></div>
+      <div id="replyBox">
+        <label class="f" for="replyInput">Your reply</label>
+        <textarea id="replyInput" rows="3" style="width:100%" placeholder="Write a reply…"></textarea>
+        <div class="rowflex" style="margin-top:8px">
+          <button class="btn" id="replyBtn" type="button">Reply</button>
+          <button class="btn ghost" id="closeThreadBtn" type="button">Back to My Tickets</button>
+        </div>
+        <div class="msg" id="replyMsg"></div>
+      </div>
+      <p class="muted hidden" id="closedNote">This ticket is closed. For a new problem, please open a new ticket above.</p>
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <span>© Link To QR</span><a href="/privacy.html">Privacy Policy</a><a href="/terms.html">Terms &amp; Conditions</a><a href="/">Tools</a>
+</footer>
+
+<script type="module" src="/js/header.js"></script>
+<script type="module">
+import {
+  auth, db, onAuthStateChanged, doc, addDoc, collection, query, where,
+  orderBy, limit, getDocs, serverTimestamp, updateDoc, fmtDate, esc
+} from "/js/fb.js";
+
+const $ = id => document.getElementById(id);
+const CAT_LABEL = { bug: "🐛 Bug Report", payment: "💳 Payment Issue", refer: "🎁 Refer Issue", other: "💬 Other" };
+const ST_LABEL = { open: "Open", replied: "Replied", closed: "Closed" };
+let me = null, openTicket = null, openData = null;
+
+function fileToB64(file) {
+  const MAX = 700000;
+  return new Promise((resolve, reject) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let scale = Math.min(1, 1200 / Math.max(img.width, img.height)), quality = 0.7;
+      for (let i = 0; i < 12; i++) {
+        const cv = document.createElement("canvas");
+        cv.width = Math.max(1, Math.round(img.width * scale));
+        cv.height = Math.max(1, Math.round(img.height * scale));
+        cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        const b64 = cv.toDataURL("image/jpeg", quality).split(",")[1] || "";
+        if (b64.length <= MAX) { resolve(b64); return; }
+        if (quality > 0.3) quality = Math.max(0.3, quality - 0.1); else scale *= 0.8;
+      }
+      reject(new Error("too large"));
+    };
+    img.onerror = () => reject(new Error("bad image"));
+    img.src = url;
+  });
+}
+
+async function loadTickets() {
+  const box = $("ticketsBox");
+  try {
+    const q = query(collection(db, "supportTickets"),
+      where("uid", "==", me.uid), orderBy("createdAt", "desc"), limit(30));
+    const snap = await getDocs(q);
+    if (snap.empty) { box.innerHTML = '<p class="muted">No tickets yet.</p>'; return; }
+    let html = "";
+    snap.forEach(d => {
+      const t = d.data();
+      const st = t.status || "open";
+      html += `<div style="border:1px solid #263449;border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer" data-tid="${d.id}">
+        <b>${esc(CAT_LABEL[t.category] || t.category || "Other")}</b>
+        <span class="chip ${st === "closed" ? "" : st}">${esc(ST_LABEL[st] || st)}</span>
+        <div class="muted" style="font-size:12.5px">${esc(fmtDate(t.createdAt))}</div>
+        <div style="white-space:pre-wrap">${esc((t.message || "").slice(0, 140))}</div>
+      </div>`;
+    });
+    box.innerHTML = html;
+    box.querySelectorAll("[data-tid]").forEach(el =>
+      el.addEventListener("click", () => openThread(el.dataset.tid)));
+  } catch (e) {
+    box.innerHTML = '<p class="muted">Couldn\'t load your tickets.</p>';
+  }
+}
+
+async function openThread(id) {
+  openTicket = id;
+  const snap = await getDocs(query(collection(db, "supportTickets"), where("uid", "==", me.uid), limit(50)));
+  let data = null;
+  snap.forEach(d => { if (d.id === id) data = d.data(); });
+  if (!data) return;
+  openData = data;
+  $("threadTitle").textContent = (CAT_LABEL[data.category] || "Ticket") + " — " + (ST_LABEL[data.status] || data.status);
+  let html = `<div style="margin-bottom:10px"><b>You</b> <span class="muted">${esc(fmtDate(data.createdAt))}</span><div style="white-space:pre-wrap">${esc(data.message || "")}</div></div>`;
+  if (data.imageB64) html += `<img src="data:image/jpeg;base64,${data.imageB64}" style="max-width:100%;border-radius:10px;margin-bottom:10px">`;
+  try {
+    const rq = query(collection(db, "supportTickets", id, "replies"), orderBy("createdAt", "asc"), limit(100));
+    const rs = await getDocs(rq);
+    rs.forEach(r => {
+      const d = r.data();
+      html += `<div style="margin-bottom:10px"><b>${d.from === "admin" ? "🛟 Support" : "You"}</b> <span class="muted">${esc(fmtDate(d.createdAt))}</span><div style="white-space:pre-wrap">${esc(d.text || "")}</div></div>`;
+    });
+  } catch (e) {}
+  $("threadBox").innerHTML = html;
+  const closed = data.status === "closed";
+  $("replyBox").classList.toggle("hidden", closed);
+  $("closedNote").classList.toggle("hidden", !closed);
+  $("threadCard").classList.remove("hidden");
+  $("threadCard").scrollIntoView({ behavior: "smooth" });
+}
+
+onAuthStateChanged(auth, async user => {
+  me = user;
+  $("guestCard").classList.toggle("hidden", !!user);
+  $("mainBox").classList.toggle("hidden", !user);
+  if (!user) return;
+  const cat = new URLSearchParams(location.search).get("cat");
+  if (cat && CAT_LABEL[cat]) $("catSel").value = cat;
+  loadTickets();
+});
+
+$("sendBtn").addEventListener("click", async () => {
+  const m = $("sendMsg"), b = $("sendBtn");
+  const text = $("msgInput").value.trim();
+  if (text.length < 3) { m.textContent = "Please write a few words about the problem."; m.className = "msg warn"; return; }
+  if (text.length > 2000) { m.textContent = "Please keep it under 2000 characters."; m.className = "msg warn"; return; }
+  b.disabled = true; m.textContent = "Sending…"; m.className = "msg";
+  try {
+    const f = {
+      uid: me.uid, email: me.email || "", name: me.displayName || "",
+      category: $("catSel").value, message: text, status: "open",
+      appVersion: "web", createdAt: serverTimestamp()
+    };
+    const file = $("photoInput").files[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) throw new Error("bad type");
+      f.imageB64 = await fileToB64(file);
+    }
+    await addDoc(collection(db, "supportTickets"), f);
+    m.textContent = "Ticket sent ✓ The admin will reply here — check My Tickets."; m.className = "msg ok";
+    $("msgInput").value = ""; $("photoInput").value = "";
+    loadTickets();
+  } catch (e) {
+    m.textContent = e && e.message === "too large"
+      ? "That photo is too large even after shrinking. Please pick a smaller one."
+      : "Could not send. Check your internet and try again.";
+    m.className = "msg err";
+  }
+  b.disabled = false;
+});
+
+$("replyBtn").addEventListener("click", async () => {
+  if (!openTicket) return;
+  const text = $("replyInput").value.trim();
+  const m = $("replyMsg");
+  if (text.length < 1) { m.textContent = "Write a reply first."; m.className = "msg warn"; return; }
+  try {
+    await addDoc(collection(db, "supportTickets", openTicket, "replies"),
+      { from: "user", text: text.slice(0, 2000), createdAt: serverTimestamp() });
+    if (openData && openData.status === "replied") {
+      await updateDoc(doc(db, "supportTickets", openTicket), { status: "open" });
+    }
+    $("replyInput").value = "";
+    openThread(openTicket); loadTickets();
+  } catch (e) { m.textContent = "Could not send the reply."; m.className = "msg err"; }
+});
+$("closeThreadBtn").addEventListener("click", () => $("threadCard").classList.add("hidden"));
+</script>
+</body>
+</html>

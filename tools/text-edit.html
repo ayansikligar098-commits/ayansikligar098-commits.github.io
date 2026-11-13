@@ -1,0 +1,1154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:,">
+<title>Text Edit — Link To QR</title>
+<!--
+  STAGING / TEST PAGE — not the live app. All libraries are LOCAL files in ./libs/
+  (see libs/VERSIONS.txt). No CDN, no network calls: every file is processed
+  on-device in the browser (Note 18). Every editor ends in a real Download
+  (Note 8.9). Uploads validate the file and show plain errors (Note 17).
+
+  Note 8.6 rule (Ayan, hard rule): these editors edit the text that is ALREADY
+  inside the PDF / photo. The old text is found, its exact area is cleaned
+  (filled with the surrounding background), and the replacement is written in
+  the same place at the matched size and colour. There is deliberately NO
+  "add new text anywhere" overlay tool here — that shortcut was refused.
+-->
+<style>
+  :root{
+    --bg:#0A0F18; --surface:#121A28; --surface2:#1A2436; --line:#263449;
+    --text:#F3F4F6; --muted:#9CA3AF; --primary:#3B82F6; --primary-dark:#1D4ED8;
+    --red:#F97066; --radius:14px; --shadow:0 8px 24px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
+  header{padding:16px;border-bottom:1px solid var(--line);background:#101A2C;position:sticky;top:0;z-index:5}
+  header h1{margin:0;font-size:20px;letter-spacing:.2px}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  main{max-width:860px;margin:0 auto;padding:16px 14px 60px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+  .toolbtn{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    color:var(--text);padding:14px 10px;font-size:14px;font-weight:700;cursor:pointer;text-align:left}
+  .toolbtn small{display:block;color:var(--muted);font-weight:500;font-size:12px;margin-top:3px}
+  .toolbtn.active{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
+  .panel{display:none;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;box-shadow:var(--shadow)}
+  .panel.open{display:block}
+  .panel h2{margin:0 0 4px;font-size:17px}
+  .panel .hint{color:var(--muted);font-size:13px;margin:0 0 14px}
+  label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}
+  input[type=text],select{
+    width:100%;background:var(--surface2);border:1px solid var(--line);border-radius:10px;
+    color:var(--text);padding:11px 12px;font-size:15px}
+  input[type=file]{width:100%;background:var(--surface2);border:1px dashed var(--line);
+    border-radius:10px;color:var(--text);padding:12px;font-size:14px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .row>div{flex:1;min-width:130px}
+  button.go{margin-top:16px;width:100%;background:var(--primary);color:#FFFFFF;border:0;
+    border-radius:12px;padding:13px;font-size:15px;font-weight:800;cursor:pointer}
+  button.go:disabled{opacity:.45;cursor:not-allowed}
+  button.mini{background:var(--surface2);border:1px solid var(--line);color:var(--text);
+    border-radius:9px;padding:8px 12px;font-size:13px;font-weight:700;cursor:pointer}
+  button.mini:disabled{opacity:.45;cursor:not-allowed}
+  .fileinfo{display:none;margin-top:10px;font-size:13px;color:var(--muted)}
+  .fileinfo b{color:var(--text)}
+  .status{margin-top:14px;font-size:14px;min-height:20px}
+  .status.ok{color:var(--primary)}
+  .error{display:none;margin-top:12px;background:#3A1D1A;border:1px solid #7A271A;color:#FECDCA;
+    padding:10px 12px;border-radius:10px;font-size:14px}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--muted);
+    border-top-color:var(--primary);border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:-2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .note{font-size:12px;color:var(--muted);margin-top:10px}
+  .warnbox{margin-top:12px;background:#2E2410;border:1px solid #7A5A1A;color:#FDE9C8;
+    padding:10px 12px;border-radius:10px;font-size:13px}
+  .canvaswrap{position:relative;margin-top:12px;border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;background:#fff;line-height:0}
+  .canvaswrap canvas{display:block;width:100%;height:auto}
+  .canvaswrap canvas.overlay{position:absolute;left:0;top:0;background:transparent}
+  .linelist{display:flex;flex-direction:column;gap:6px;margin-top:12px;max-height:260px;overflow:auto}
+  .linelist button{background:var(--surface2);border:1px solid var(--line);color:var(--text);
+    border-radius:9px;padding:10px 12px;font-size:14px;line-height:1.5;text-align:left;cursor:pointer;
+    white-space:normal;overflow:visible;word-break:break-word;height:auto;flex:none}
+  .linelist button.sel{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;max-height:200px;overflow:auto}
+  .chips button{background:var(--surface2);border:1px solid var(--line);color:var(--text);
+    border-radius:999px;padding:6px 11px;font-size:13px;cursor:pointer}
+  .chips button.sel{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
+  .swatch{display:inline-block;width:16px;height:16px;border-radius:4px;border:1px solid var(--line);
+    vertical-align:-3px;margin:0 4px}
+  .edits{list-style:none;margin:12px 0 0;padding:0}
+  .edits li{display:flex;gap:8px;align-items:center;background:var(--surface2);border:1px solid var(--line);
+    border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:13px}
+  .edits .grow{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .edits button{background:none;border:1px solid var(--line);color:var(--text);border-radius:8px;
+    padding:4px 8px;cursor:pointer;font-size:12px}
+  .pager{display:flex;gap:8px;align-items:center;margin-top:12px}
+  .pager span{font-size:13px;color:var(--muted)}
+</style>
+
+<style id="ltqr-redesign">
+/* ===== Link To QR redesign layer (presentation only) ===== */
+body{background-image:radial-gradient(1100px 480px at 50% -140px, rgba(37,99,235,.10), transparent 70%)}
+header{background:linear-gradient(180deg,var(--surface2),#101A2C)}
+header h1{display:flex;align-items:center;gap:12px}
+header h1::before{content:"✏️";display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:13px;font-size:22px;background:linear-gradient(135deg,#93C5FD,#2563EB);box-shadow:0 8px 18px rgba(37,99,235,.35);flex:0 0 auto}
+.panel{border-radius:18px;box-shadow:0 14px 34px rgba(0,0,0,.42)}
+.toolbtn{border-radius:16px;transition:transform .12s ease,border-color .12s ease,box-shadow .12s ease}
+.toolbtn:hover{transform:translateY(-1px);border-color:#3A4149}
+button.go{border-radius:14px;box-shadow:0 10px 24px rgba(59,130,246,.25);letter-spacing:.02em}
+input[type=text],input[type=number],input[type=password],select{border-radius:12px}
+input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(59,130,246,.22)}
+</style>
+</head>
+<body>
+<div style="position:sticky;top:0;z-index:60;background:rgba(15,17,19,.97);border-bottom:1px solid #263449;padding:9px 14px;font-family:system-ui,sans-serif;display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+  <a href="/" style="color:#EDF1F0;text-decoration:none;font-weight:800">▦ Link To QR</a>
+  <a href="/tools/pdf-tools.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">PDF Tools</a>
+  <a href="/tools/image-tools.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Photo Tools</a>
+  <a href="/tools/scanner.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Scanner</a>
+  <a href="/tools/text-edit.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Text Edit</a>
+  <span style="margin-left:auto;display:flex;gap:12px">
+    <a href="/premium.html" style="color:#FFC95C;text-decoration:none;font-size:13.5px;font-weight:700">Premium</a>
+    <a href="/login.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Login</a>
+  </span>
+</div>
+<button type="button" id="ltqrBack" style="display:inline-flex;align-items:center;gap:6px;margin:12px 14px 0;padding:8px 18px;border:1px solid #263449;border-radius:999px;background:#121A28;color:#EDF1F0;font:600 14px system-ui,sans-serif;cursor:pointer">← Back</button>
+<script>
+document.getElementById('ltqrBack').addEventListener('click', function(){
+  try { if (window.history.length > 1) { window.history.back(); return; } } catch(e){}
+  try { window.location.href = '/'; } catch(e){}
+});
+</script>
+<header>
+  <h1>✏️ Text Edit</h1>
+  <p>All files are processed on your device. Nothing is uploaded to any server.</p>
+</header>
+<main>
+  <div class="grid" id="toolgrid">
+    <button class="toolbtn" data-tool="pdftext">PDF Text Editor<small>Change text that is inside a PDF</small></button>
+    <button class="toolbtn" data-tool="phototext">Photo Text Editor<small>Change text that is inside a photo — Beta</small></button>
+  </div>
+
+  <!-- ============ PDF TEXT EDITOR ============ -->
+  <section class="panel" id="panel-pdftext">
+    <h2>PDF Text Editor</h2>
+    <p class="hint">Pick a PDF, tap a line of text on the page (or in the list below it),
+      type the replacement, and download the edited PDF. The old line is cleaned off the page
+      first, then your text is written in the same place, at the same size and colour.</p>
+    <label>PDF file</label>
+    <input type="file" id="pdf-file" accept="application/pdf,.pdf">
+    <div class="fileinfo" id="pdf-fileinfo"></div>
+    <div id="pdf-pwbox" style="display:none;margin-top:10px">
+      <label>🔒 This PDF is locked — type its password</label>
+      <div class="note" id="pdf-pw-note" style="display:none"></div>
+      <input type="password" id="pdf-pw" placeholder="PDF password" autocomplete="off">
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button class="go" id="pdf-pw-open" type="button" style="flex:1">Open PDF</button>
+        <button class="mini" id="pdf-pw-cancel" type="button">Cancel</button>
+      </div>
+      <p class="note">The password is used only to open the file. It is never saved anywhere.</p>
+    </div>
+    <div class="pager" id="pdf-pager" style="display:none">
+      <button class="mini" id="pdf-prev">← Prev page</button>
+      <span id="pdf-pageno"></span>
+      <button class="mini" id="pdf-next">Next page →</button>
+    </div>
+    <div class="canvaswrap" id="pdf-wrap" style="display:none">
+      <canvas id="pdf-canvas"></canvas>
+      <canvas class="overlay" id="pdf-overlay"></canvas>
+    </div>
+    <div class="linelist" id="pdf-lines"></div>
+    <div id="pdf-editbox" style="display:none">
+      <label>Selected line</label>
+      <div style="font-size:14px"><span id="pdf-oldtext"></span></div>
+      <div class="note">Text colour <span class="swatch" id="pdf-swatch-text"></span>
+        Background <span class="swatch" id="pdf-swatch-bg"></span>
+        <span id="pdf-lineinfo"></span></div>
+      <label>Edit this text</label>
+      <input type="text" id="pdf-newtext" placeholder="Edit the line…">
+      <button class="go" id="pdf-apply">Apply this change</button>
+    </div>
+    <ul class="edits" id="pdf-edits"></ul>
+    <button class="go" id="pdf-download" disabled>Make edited PDF</button>
+    <button class="go" id="pdf-save" style="display:none">⬇ Download edited PDF</button>
+    <p class="note">The replacement is written in a standard font matched as closely as
+      possible to the original line's size and colour. It may not be the exact same font
+      as the document's own font. Works on PDFs that contain real text (most PDFs made by
+      a computer). If a page is a scanned photo with no real text, the app reads it with the
+      on-device word finder (OCR) and you can edit the lines it finds — OCR can misread
+      letters, so check each line before applying. If a PDF is locked, you will be asked
+      for its password — the password is never saved.</p>
+    <div class="error" id="pdf-error"></div><div class="status" id="pdf-status"></div>
+  </section>
+
+  <!-- ============ PHOTO TEXT EDITOR ============ -->
+  <section class="panel" id="panel-phototext">
+    <h2>Photo Text Editor <span style="color:var(--muted);font-size:13px">— Beta, experimental</span></h2>
+    <p class="hint">Pick a photo, let the app find the words in it, tap a word, type the
+      replacement and download the edited photo. The old word is cleaned off and the new
+      word is written in its place.</p>
+    <div class="warnbox"><b>Honest warning:</b> this is beta quality. It works best on clear
+      photos of printed text on a plain background. On busy or photo backgrounds the cleaned
+      patch can stay visible, and the new word is written in a standard font, so it will not
+      look exactly like the original writing.</div>
+    <label>Photo</label>
+    <input type="file" id="ph-file" accept="image/*">
+    <div class="fileinfo" id="ph-fileinfo"></div>
+    <button class="go" id="ph-ocr" disabled>Find text in this photo</button>
+    <div class="canvaswrap" id="ph-wrap" style="display:none">
+      <canvas id="ph-canvas"></canvas>
+      <canvas class="overlay" id="ph-overlay"></canvas>
+    </div>
+    <div class="chips" id="ph-words"></div>
+    <div id="ph-editbox" style="display:none">
+      <label>Selected word</label>
+      <div style="font-size:14px"><span id="ph-oldword"></span></div>
+      <div class="note">Word colour <span class="swatch" id="ph-swatch-text"></span>
+        Background <span class="swatch" id="ph-swatch-bg"></span></div>
+      <label>Edit this word</label>
+      <input type="text" id="photo-newword" placeholder="Edit the word…">
+      <button class="go" id="ph-apply">Replace this word</button>
+    </div>
+    <div class="row">
+      <div><label>Download format</label>
+        <select id="ph-format"><option value="jpeg">JPG</option><option value="png">PNG</option></select></div>
+    </div>
+    <button class="go" id="ph-download" disabled>Make edited photo</button>
+    <button class="go" id="ph-save" style="display:none">⬇ Download edited photo</button>
+    <p class="note">Reading the text happens fully on this device (offline word finder).
+      The first run can take a little while. After a word is replaced, tap
+      "Find text in this photo" again if you want to change another word.</p>
+    <div class="error" id="ph-error"></div><div class="status" id="ph-status"></div>
+  </section>
+</main>
+
+<script src="libs/pdf.min.js"></script>
+<script src="libs/pdf-lib.min.js"></script>
+<script src="libs/ocr/tesseract.min.js"></script>
+
+<script id="textedit-core">
+/* TextEditCore — pure edit math, no DOM in here on purpose: the Node test
+   suite (tests/textedit_tests.js) loads this exact block and runs the exact
+   code the page runs. Pixel functions work on flat RGBA arrays (the same
+   layout as canvas ImageData.data). Coordinates: pixel boxes are
+   {x, y, w, h} with a top-left origin; PDF line boxes are in PDF user units
+   (points, bottom-left origin, y up), exactly like pdf-lib uses. */
+(function (root) {
+  'use strict';
+  var TextEditCore = (function () {
+
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  function chanDist(r1, g1, b1, r2, g2, b2) {
+    var dr = r1 - r2, dg = g1 - g2, db = b1 - b2;
+    return Math.sqrt(dr * dr + dg * dg + db * db);
+  }
+  function luminance(r, g, b) { return 0.2126 * r + 0.7152 * g + 0.0722 * b; }
+  function medianOf(list) {
+    if (!list.length) return 0;
+    var s = list.slice().sort(function (a, b) { return a - b; });
+    return s[Math.floor(s.length / 2)];
+  }
+  function css(c) { return 'rgb(' + c.r + ',' + c.g + ',' + c.b + ')'; }
+  function pdfRgb(c) { return { r: c.r / 255, g: c.g / 255, b: c.b / 255 }; }
+
+  /* ---- background estimate: median colour of the ring around a box ------ */
+  function localBgEstimate(data, w, h, box, ring) {
+    ring = ring || 6;
+    var rs = [], gs = [], bs = [];
+    var x0 = Math.max(0, Math.floor(box.x) - ring), y0 = Math.max(0, Math.floor(box.y) - ring);
+    var x1 = Math.min(w, Math.ceil(box.x + box.w) + ring), y1 = Math.min(h, Math.ceil(box.y + box.h) + ring);
+    for (var y = y0; y < y1; y += 2) for (var x = x0; x < x1; x += 2) {
+      if (x >= box.x && x < box.x + box.w && y >= box.y && y < box.y + box.h) continue;
+      var i = (y * w + x) * 4;
+      rs.push(data[i]); gs.push(data[i + 1]); bs.push(data[i + 2]);
+    }
+    if (!rs.length) return { r: 255, g: 255, b: 255 };
+    return { r: medianOf(rs), g: medianOf(gs), b: medianOf(bs) };
+  }
+
+  /* ---- sample a region: background colour, average text (ink) colour,
+         and how many pixels clearly differ from the background ----------- */
+  function sampleRegion(data, w, h, box) {
+    var bg = localBgEstimate(data, w, h, box, 6);
+    var sr = 0, sg = 0, sb = 0, n = 0, dark = 0, total = 0;
+    var x0 = Math.max(0, Math.floor(box.x)), y0 = Math.max(0, Math.floor(box.y));
+    var x1 = Math.min(w, Math.ceil(box.x + box.w)), y1 = Math.min(h, Math.ceil(box.y + box.h));
+    for (var y = y0; y < y1; y++) for (var x = x0; x < x1; x++) {
+      var i = (y * w + x) * 4, r = data[i], g = data[i + 1], b = data[i + 2];
+      total++;
+      if (chanDist(r, g, b, bg.r, bg.g, bg.b) > 60) { dark++; sr += r; sg += g; sb += b; n++; }
+    }
+    var text = n ? { r: Math.round(sr / n), g: Math.round(sg / n), b: Math.round(sb / n) }
+                 : { r: 0, g: 0, b: 0 };
+    return { bg: bg, text: text, inkCount: dark, total: total };
+  }
+
+  function countInk(data, w, h, box, bg, thresh) {
+    thresh = thresh || 60;
+    var n = 0;
+    var x0 = Math.max(0, Math.floor(box.x)), y0 = Math.max(0, Math.floor(box.y));
+    var x1 = Math.min(w, Math.ceil(box.x + box.w)), y1 = Math.min(h, Math.ceil(box.y + box.h));
+    for (var y = y0; y < y1; y++) for (var x = x0; x < x1; x++) {
+      var i = (y * w + x) * 4;
+      if (chanDist(data[i], data[i + 1], data[i + 2], bg.r, bg.g, bg.b) > thresh) n++;
+    }
+    return n;
+  }
+
+  /* luminance spread inside a box — a flat, clean patch has a low spread;
+     leftover texture / glyphs keep it high. Used to judge erase quality. */
+  function regionSpread(data, w, box) {
+    var x0 = Math.max(0, Math.floor(box.x)), y0 = Math.max(0, Math.floor(box.y));
+    var x1 = Math.min(w, Math.ceil(box.x + box.w));
+    var vals = [];
+    for (var y = y0; y < box.y + box.h; y += 2) for (var x = x0; x < x1; x += 2) {
+      var i = (y * w + x) * 4;
+      vals.push(luminance(data[i], data[i + 1], data[i + 2]));
+    }
+    if (!vals.length) return 0;
+    var mean = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+    var v = vals.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / vals.length;
+    return Math.sqrt(v);
+  }
+
+  /* ---- erase a box in a photo: fill with the locally estimated background
+         colour, feathered at the very edge so the patch seam is softer.
+         Honest limit: the fill is FLAT. On a plain background this is
+         invisible; on a textured / photo background the flat patch stays
+         visible — there is no texture to rebuild it from. ---------------- */
+  function eraseBoxPhoto(data, w, h, box, pad) {
+    pad = (pad == null) ? 3 : pad;
+    var ex = Math.max(0, Math.floor(box.x) - pad), ey = Math.max(0, Math.floor(box.y) - pad);
+    var ex1 = Math.min(w, Math.ceil(box.x + box.w) + pad), ey1 = Math.min(h, Math.ceil(box.y + box.h) + pad);
+    var eb = { x: ex, y: ey, w: ex1 - ex, h: ey1 - ey };
+    var bg = localBgEstimate(data, w, h, eb, 8);
+    var orig = new Uint8ClampedArray(eb.w * eb.h * 4);
+    var x, y, si, di;
+    for (y = 0; y < eb.h; y++) for (x = 0; x < eb.w; x++) {
+      si = ((eb.y + y) * w + (eb.x + x)) * 4; di = (y * eb.w + x) * 4;
+      orig[di] = data[si]; orig[di + 1] = data[si + 1]; orig[di + 2] = data[si + 2]; orig[di + 3] = data[si + 3];
+    }
+    for (y = 0; y < eb.h; y++) for (x = 0; x < eb.w; x++) {
+      var dEdge = Math.min(x, y, eb.w - 1 - x, eb.h - 1 - y);
+      var t = clamp(dEdge / 3, 0, 1); /* 0 at the edge (original), 1 inside (flat bg) */
+      var ii = (y * eb.w + x) * 4, oi = ((eb.y + y) * w + (eb.x + x)) * 4;
+      data[oi]     = Math.round(bg.r * t + orig[ii]     * (1 - t));
+      data[oi + 1] = Math.round(bg.g * t + orig[ii + 1] * (1 - t));
+      data[oi + 2] = Math.round(bg.b * t + orig[ii + 2] * (1 - t));
+      data[oi + 3] = 255;
+    }
+    return { bg: bg, box: eb };
+  }
+
+  /* ---- plan how replacement text is drawn in a photo word box.
+         Font size is matched to the box height (an OCR word box is roughly
+         0.69 of the font size for plain print), then shrunk to fit the old
+         word's own width if the new word would run wider — otherwise it
+         would crash into the next word and change the line's layout.
+         measureWidth(size) is supplied by the caller (canvas measureText). */
+  function planPhotoText(box, measureWidth) {
+    var boxH = box.y1 - box.y0, boxW = box.x1 - box.x0;
+    var size = boxH * 1.45;
+    if (measureWidth) {
+      var wdt = measureWidth(size);
+      if (wdt > 0 && wdt > boxW * 1.02) size = size * (boxW * 1.02) / wdt;
+    }
+    return { size: Math.max(6, Math.round(size * 10) / 10), x: box.x0, baseline: box.y1 };
+  }
+
+  /* ---- normalise Tesseract's result into a plain word list ------------- */
+  function wordsFromOcr(data) {
+    var words = (data && data.words) || [];
+    var out = [];
+    for (var i = 0; i < words.length; i++) {
+      var wd = words[i];
+      if (!wd || !wd.text || !wd.text.trim() || !wd.bbox) continue;
+      out.push({ text: wd.text, confidence: wd.confidence || 0,
+        box: { x0: wd.bbox.x0, y0: wd.bbox.y0, x1: wd.bbox.x1, y1: wd.bbox.y1 } });
+    }
+    return out;
+  }
+
+  /* ---- group OCR words into lines (for scanned PDF pages) ---------------
+     Words arrive as {text, confidence, box:{x0,y0,x1,y1}} in page-render
+     pixels. Words whose vertical centres sit within about half a typical
+     word height of each other form one line; lines come back top-to-bottom
+     with the words in reading order, so a scanned page can be presented in
+     the same tap-a-line UI as a real text layer. -------------------------- */
+  function groupOcrWords(words) {
+    var list = [];
+    (words || []).forEach(function (w) {
+      if (w && w.text && w.box && !(typeof w.confidence === 'number' && w.confidence < 40)) list.push(w);
+    });
+    if (!list.length) return [];
+    var medH = medianOf(list.map(function (w) { return Math.max(1, w.box.y1 - w.box.y0); })) || 12;
+    var sorted = list.slice().sort(function (a, b) {
+      var ca = (a.box.y0 + a.box.y1) / 2, cb = (b.box.y0 + b.box.y1) / 2;
+      return (ca - cb) || (a.box.x0 - b.box.x0);
+    });
+    var raw = [];
+    sorted.forEach(function (w) {
+      var cy = (w.box.y0 + w.box.y1) / 2, placed = false;
+      for (var i = 0; i < raw.length; i++) {
+        var L = raw[i], lcy = (L.box.y0 + L.box.y1) / 2;
+        if (Math.abs(cy - lcy) <= Math.max(4, 0.55 * medH)) {
+          L.words.push(w);
+          L.box = { x0: Math.min(L.box.x0, w.box.x0), y0: Math.min(L.box.y0, w.box.y0),
+                    x1: Math.max(L.box.x1, w.box.x1), y1: Math.max(L.box.y1, w.box.y1) };
+          placed = true; break;
+        }
+      }
+      if (!placed) raw.push({ words: [w], box: { x0: w.box.x0, y0: w.box.y0, x1: w.box.x1, y1: w.box.y1 } });
+    });
+    raw.sort(function (a, b) { return a.box.y0 - b.box.y0; });
+    return raw.map(function (L) {
+      var ws = L.words.slice().sort(function (a, b) { return a.box.x0 - b.box.x0; });
+      var conf = ws.reduce(function (s, w) { return s + (w.confidence || 0); }, 0) / ws.length;
+      return { text: ws.map(function (w) { return w.text; }).join(' '), ocr: true,
+               confidence: Math.round(conf),
+               px: { x: L.box.x0, y: L.box.y0, w: L.box.x1 - L.box.x0, h: L.box.y1 - L.box.y0 } };
+    });
+  }
+
+  /* ================= PDF: group extracted items into lines ==============
+     Items come in as {str, x, y, width, fontSize, fontName} where x/y are
+     the item's text origin (baseline start) in PDF user units. Lines are
+     returned top-to-bottom, each with its joined text and geometry. ------ */
+  function groupTextItems(items) {
+    var list = [];
+    var i, j;
+    for (i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (it && it.str && it.str.trim()) list.push(it);
+    }
+    list.sort(function (a, b) { return (b.y - a.y) || (a.x - b.x); });
+    var raw = [];
+    for (i = 0; i < list.length; i++) {
+      var cur = list[i], placed = false;
+      for (j = 0; j < raw.length; j++) {
+        var L = raw[j];
+        var tol = Math.max(2.5, 0.35 * Math.min(cur.fontSize || 12, L.fontSize || 12));
+        if (Math.abs(cur.y - L.baseline) <= tol) { L.items.push(cur); placed = true; break; }
+      }
+      if (!placed) raw.push({ items: [cur], baseline: cur.y, fontSize: cur.fontSize || 12 });
+    }
+    var out = [];
+    raw.forEach(function (L) {
+      L.items.sort(function (a, b) { return a.x - b.x; });
+      /* SEGMENT SPLIT: items on one baseline can still be two unrelated
+         columns (a statement prints a label on the left and a value on the
+         right of the same row). A horizontal gap much larger than a word
+         space — more than 2x the font size — starts a NEW segment, so each
+         column's text is listed, selected and edited on its own, with its
+         own x/width. Normal word gaps (a fraction of the font size) never
+         split a segment, so ordinary lines stay whole. */
+      var segs = [[L.items[0]]];
+      for (var k = 1; k < L.items.length; k++) {
+        var prevIt = L.items[k - 1], nextIt = L.items[k];
+        var gap = nextIt.x - (prevIt.x + (prevIt.width || 0));
+        var gapLimit = 2.0 * Math.max(nextIt.fontSize || 12, prevIt.fontSize || 12);
+        if (gap > gapLimit) segs.push([nextIt]);
+        else segs[segs.length - 1].push(nextIt);
+      }
+      segs.forEach(function (segItems) {
+        var x = Math.min.apply(null, segItems.map(function (t) { return t.x; }));
+        var end = Math.max.apply(null, segItems.map(function (t) { return t.x + (t.width || 0); }));
+        var fs = Math.max.apply(null, segItems.map(function (t) { return t.fontSize || 12; }));
+        var tallest = segItems[0];
+        segItems.forEach(function (t) { if ((t.fontSize || 0) >= (tallest.fontSize || 0)) tallest = t; });
+        var text = '';
+        segItems.forEach(function (t, idx) {
+          if (idx > 0) {
+            var pv = segItems[idx - 1];
+            var gp = t.x - (pv.x + (pv.width || 0));
+            if (gp > 0.22 * (t.fontSize || 12) && !/\s$/.test(text) && !/^\s/.test(t.str)) text += ' ';
+          }
+          text += t.str;
+        });
+        out.push({ text: text, x: x, width: end - x, baseline: tallest.y,
+                   fontSize: fs, fontName: tallest.fontName || '', items: segItems });
+      });
+    });
+    out.sort(function (a, b) { return (b.baseline - a.baseline) || (a.x - b.x); });
+    return out;
+  }
+
+  /* The erase rectangle for a line, in PDF user units: covers the glyphs
+     from descent to ascent with a small pad. If the next line sits closer
+     than this box, the pad can touch it — standard line spacing is fine. - */
+  function lineBox(line, pad) {
+    pad = (pad == null) ? 1.5 : pad;
+    var fs = line.fontSize || 12;
+    var yTop = line.baseline + fs * 0.82, yBottom = line.baseline - fs * 0.28;
+    return { x: line.x - pad, yBottom: yBottom - pad, yTop: yTop + pad,
+             w: line.width + pad * 2, h: (yTop - yBottom) + pad * 2 };
+  }
+
+  /* Convert a PDF-space line box to a pixel box on a rendered page
+     (render scale + page height in user units). -------------------------- */
+  function userBoxToPx(box, scale, pageHeightUser) {
+    return { x: box.x * scale, y: (pageHeightUser - box.yTop) * scale,
+             w: box.w * scale, h: box.h * scale };
+  }
+
+  /* Map a document font name to the closest pdf-lib standard font.
+     This is an approximation by design — the original font file is not
+     available to rewrite with, and no honest tool in the browser has it. - */
+  function pickStdFont(hint) {
+    var s = String(hint || '').toLowerCase();
+    var bold = s.indexOf('bold') >= 0 || s.indexOf('black') >= 0 || s.indexOf('heavy') >= 0;
+    if (s.indexOf('courier') >= 0 || s.indexOf('mono') >= 0) return bold ? 'CourierBold' : 'Courier';
+    if (s.indexOf('times') >= 0 || (s.indexOf('serif') >= 0 && s.indexOf('sans') < 0))
+      return bold ? 'TimesRomanBold' : 'TimesRoman';
+    return bold ? 'HelveticaBold' : 'Helvetica';
+  }
+
+  return {
+    clamp: clamp, css: css, pdfRgb: pdfRgb,
+    localBgEstimate: localBgEstimate, sampleRegion: sampleRegion,
+    countInk: countInk, regionSpread: regionSpread,
+    eraseBoxPhoto: eraseBoxPhoto, planPhotoText: planPhotoText,
+    wordsFromOcr: wordsFromOcr, groupOcrWords: groupOcrWords,
+    groupTextItems: groupTextItems, lineBox: lineBox,
+    userBoxToPx: userBoxToPx, pickStdFont: pickStdFont
+  };
+  })();
+  root.TextEditCore = TextEditCore;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+
+<script>
+/* ================= page wiring ================= */
+(function () {
+  'use strict';
+  var Core = window.TextEditCore;
+  function $(id) { return document.getElementById(id); }
+  var ERROR_CODES = { pdf: 'TXT-01', ph: 'TXT-02' };
+  function showError(p, msg) { var e = $(p + '-error'); if (msg) msg = msg + ' [Code: ' + (ERROR_CODES[p] || 'TXT-00') + ']'; e.textContent = msg; e.style.display = 'block'; }
+  function clearError(p) { var e = $(p + '-error'); e.textContent = ''; e.style.display = 'none'; }
+  function setStatus(p, msg, ok) { var s = $(p + '-status'); s.innerHTML = msg; s.className = 'status' + (ok ? ' ok' : ''); }
+  function busy(p, msg) { setStatus(p, '<span class="spin"></span> ' + msg, false); }
+  function download(blob, name) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+  }
+
+  /* ---------- two-step Make -> Download ----------
+     The "Make edited …" button only BUILDS the result file (nothing is
+     saved). The separate Download button then saves exactly those bytes;
+     in the app the saved file also opens directly (Open button stays as
+     a fallback). */
+  var pendingSave = { pdf: null, ph: null };
+  function showSave(p, blob, name) {
+    pendingSave[p] = { blob: blob, name: name };
+    var b = $(p + '-save');
+    if (b) b.style.display = 'block';
+    setStatus(p, '✅ Ready: ' + name + ' — tap Download to save it.', true);
+  }
+  function hideSave(p) {
+    pendingSave[p] = null;
+    var b = $(p + '-save');
+    if (b) b.style.display = 'none';
+  }
+  function savePending(p) {
+    var r = pendingSave[p]; if (!r) return;
+    window.__ltqrAutoOpenNext = true;
+    download(r.blob, r.name);
+    setStatus(p, 'Saved: ' + r.name + '. The original file was not changed.', true);
+  }
+  window.__ltqrTwoStep = { pending: pendingSave, showSave: showSave, hideSave: hideSave, savePending: savePending };
+  $('pdf-save').addEventListener('click', function () { savePending('pdf'); });
+  $('ph-save').addEventListener('click', function () { savePending('ph'); });
+  if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'libs/pdf.worker.min.js';
+
+  /* tool switching */
+  var btns = document.querySelectorAll('.toolbtn');
+  btns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      btns.forEach(function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('open'); });
+      $('panel-' + b.getAttribute('data-tool')).classList.add('open');
+    });
+  });
+  btns[0].click();
+
+  /* ================================================================
+     PDF TEXT EDITOR
+     ================================================================ */
+  var P = { bytes: null, name: '', doc: null, pageNo: 1, numPages: 0,
+            lines: [], samples: [], sel: -1, edits: [], pageH: 0, scale: 2,
+            mode: 'text', encrypted: false };
+
+  /* A line's box in page-render pixels — real text lines convert from PDF
+     user units; OCR lines already carry pixel boxes. */
+  function pdfPxBox(ln) {
+    return ln.ocr ? ln.px : Core.userBoxToPx(Core.lineBox(ln), P.scale, P.pageH);
+  }
+
+  function pdfItems(page) {
+    return page.getTextContent().then(function (tc) {
+      return tc.items.map(function (it) {
+        var tm = it.transform || [1, 0, 0, 1, 0, 0];
+        var name = it.fontName || '';
+        try {
+          var fo = page.commonObjs.get(it.fontName);
+          if (fo && fo.name) name = fo.name;
+        } catch (e) { /* font not resolved yet — standard font fallback */ }
+        return { str: it.str, x: tm[4], y: tm[5], width: it.width || 0,
+                 fontSize: Math.hypot(tm[2], tm[3]) || it.height || 12, fontName: name };
+      });
+    });
+  }
+
+  function renderPdfPage() {
+    if (!P.doc) return;
+    clearError('pdf'); busy('pdf', 'Reading page ' + P.pageNo + '…');
+    P.doc.getPage(P.pageNo).then(function (page) {
+      var unit = page.getViewport({ scale: 1 });
+      P.pageH = unit.height;
+      P.scale = Math.min(2, 1100 / unit.width);
+      var vp = page.getViewport({ scale: P.scale });
+      var cv = $('pdf-canvas'); cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
+      var ov = $('pdf-overlay'); ov.width = cv.width; ov.height = cv.height;
+      $('pdf-wrap').style.display = 'block';
+      $('pdf-pager').style.display = 'flex';
+      $('pdf-pageno').textContent = 'Page ' + P.pageNo + ' of ' + P.numPages;
+      $('pdf-prev').disabled = P.pageNo <= 1;
+      $('pdf-next').disabled = P.pageNo >= P.numPages;
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+      return page.render({ canvasContext: ctx, viewport: vp }).promise.then(function () {
+        return pdfItems(page);
+      }).then(function (items) {
+        P.lines = Core.groupTextItems(items);
+        var img = ctx.getImageData(0, 0, cv.width, cv.height);
+        P.samples = P.lines.map(function (ln) {
+          var px = Core.userBoxToPx(Core.lineBox(ln), P.scale, P.pageH);
+          return Core.sampleRegion(img.data, cv.width, cv.height, px);
+        });
+        P.sel = -1;
+        drawPdfOverlay();
+        renderPdfLineList();
+        $('pdf-editbox').style.display = 'none';
+        if (P.lines.length) {
+          P.mode = 'text';
+          setStatus('pdf', P.lines.length + ' lines of text found on this page. Tap a line — on the page itself or in the list below — to change it.', true);
+        } else {
+          /* No real text layer: this page is a scanned photo. Read it with
+             the on-device word finder (OCR) instead of dead-ending. */
+          P.mode = 'ocr';
+          runPdfOcr(cv, img);
+        }
+      });
+    }).catch(function (e) {
+      showError('pdf', 'This page could not be read: ' + (e && e.message ? e.message : e));
+      setStatus('pdf', '', false);
+    });
+  }
+
+  /* OCR path for scanned PDF pages: Tesseract (bundled, offline — the same
+     engine and local paths as the Photo Text Editor) reads the rendered
+     page; its words are grouped into lines and shown in the same UI. OCR
+     lines are labelled honestly in the status and in the edit box. */
+  function runPdfOcr(cv, img) {
+    if (!window.Tesseract) { showError('pdf', 'The word finder is not available in this build.'); setStatus('pdf', '', false); return; }
+    busy('pdf', 'No real text on this page — reading it with the on-device word finder (OCR)…');
+    var worker = null;
+    (async function () {
+      try {
+        worker = await Tesseract.createWorker('eng', '1', {
+          workerPath: 'libs/ocr/worker.min.js',
+          corePath: 'libs/ocr',
+          langPath: 'libs/ocr',
+          cacheMethod: 'none',
+          gzip: true,
+          logger: function (m) {
+            if (m.status === 'recognizing text') busy('pdf', 'Reading this scanned page with the word finder (OCR)… ' + Math.round(m.progress * 100) + '%');
+          }
+        });
+        var res = await worker.recognize(cv);
+        await worker.terminate(); worker = null;
+        P.lines = Core.groupOcrWords(Core.wordsFromOcr(res.data));
+        P.samples = P.lines.map(function (ln) {
+          return Core.sampleRegion(img.data, cv.width, cv.height, ln.px);
+        });
+        P.sel = -1;
+        drawPdfOverlay();
+        renderPdfLineList();
+        $('pdf-editbox').style.display = 'none';
+        if (P.lines.length) setStatus('pdf', 'This page is a scanned photo — it has no real text, so it was read by OCR (the on-device word finder): ' + P.lines.length + ' lines found. Tap a line to change it. OCR can misread letters — check the line text before applying.', true);
+        else setStatus('pdf', 'The word finder could not read any clear text on this page. A sharper, straight-on scan works better.', false);
+      } catch (e) {
+        if (worker) { try { await worker.terminate(); } catch (e2) {} }
+        showError('pdf', 'This scanned page could not be read: ' + (e && e.message ? e.message : e));
+        setStatus('pdf', '', false);
+      }
+    })();
+  }
+
+  function drawPdfOverlay() {
+    var ov = $('pdf-overlay'), ctx = ov.getContext('2d');
+    ctx.clearRect(0, 0, ov.width, ov.height);
+    P.lines.forEach(function (ln, i) {
+      var px = pdfPxBox(ln);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = (i === P.sel) ? '#E5484D' : 'rgba(59,130,246,0.85)';
+      ctx.fillStyle = (i === P.sel) ? 'rgba(229,72,77,0.15)' : 'rgba(59,130,246,0.10)';
+      ctx.fillRect(px.x, px.y, px.w, px.h);
+      ctx.strokeRect(px.x, px.y, px.w, px.h);
+    });
+  }
+
+  function renderPdfLineList() {
+    var box = $('pdf-lines'); box.innerHTML = '';
+    P.lines.forEach(function (ln, i) {
+      var b = document.createElement('button');
+      b.textContent = ln.text;
+      if (i === P.sel) b.className = 'sel';
+      b.addEventListener('click', function () { selectPdfLine(i); });
+      box.appendChild(b);
+    });
+  }
+
+  function selectPdfLine(i) {
+    P.sel = i;
+    var ln = P.lines[i], sm = P.samples[i];
+    $('pdf-oldtext').textContent = ln.text;
+    $('pdf-swatch-text').style.background = Core.css(sm.text);
+    $('pdf-swatch-bg').style.background = Core.css(sm.bg);
+    $('pdf-lineinfo').textContent = ln.ocr
+      ? 'Read by OCR · size about ' + Math.max(6, Math.round((ln.px.h / P.scale) / 1.1)) + ' pt'
+      : 'Size about ' + Math.round(ln.fontSize) + ' pt';
+    /* PRE-FILL: the edit box starts with the line's exact current text, so
+       the user edits the same text in place instead of retyping it. */
+    if (ln) $('pdf-newtext').value = ln.text;
+    $('pdf-editbox').style.display = 'block';
+    drawPdfOverlay(); renderPdfLineList();
+  }
+
+  /* Tap a highlighted line ON THE PAGE to select it (same as tapping it in
+     the list below). If boxes ever overlap, the smallest one wins — it is
+     the most specific segment under the finger. */
+  $('pdf-overlay').addEventListener('click', function (ev) {
+    var ov = $('pdf-overlay'), r = ov.getBoundingClientRect();
+    var px = (ev.clientX - r.left) * (ov.width / r.width);
+    var py = (ev.clientY - r.top) * (ov.height / r.height);
+    var best = -1, bestArea = Infinity;
+    for (var i = 0; i < P.lines.length; i++) {
+      var b = pdfPxBox(P.lines[i]);
+      /* 6px of slack around the box — fingers are bigger than cursors. */
+      if (px >= b.x - 6 && px <= b.x + b.w + 6 && py >= b.y - 6 && py <= b.y + b.h + 6) {
+        var area = b.w * b.h;
+        if (area < bestArea) { bestArea = area; best = i; }
+      }
+    }
+    if (best >= 0) selectPdfLine(best);
+  });
+
+  /* In-page password prompt for locked PDFs (window.prompt is unreliable
+     inside the app WebView, so the page asks itself). Resolves with the
+     typed password, or null on Cancel. The password lives only in this
+     promise — it is never stored, logged or sent anywhere. */
+  function askPdfPassword(wrongRetry) {
+    return new Promise(function (resolve) {
+      var box = $('pdf-pwbox'), input = $('pdf-pw'), note = $('pdf-pw-note');
+      note.style.display = wrongRetry ? 'block' : 'none';
+      if (wrongRetry) note.textContent = 'That password was wrong — please try again.';
+      input.value = '';
+      box.style.display = 'block';
+      function done(v) {
+        box.style.display = 'none';
+        $('pdf-pw-open').onclick = null; $('pdf-pw-cancel').onclick = null;
+        input.onkeydown = null;
+        resolve(v);
+      }
+      $('pdf-pw-open').onclick = function () { done(input.value); };
+      $('pdf-pw-cancel').onclick = function () { done(null); };
+      input.onkeydown = function (ev) { if (ev.key === 'Enter') done(input.value); };
+      setTimeout(function () { try { input.focus(); } catch (e) {} }, 60);
+    });
+  }
+  function isPasswordError(e) {
+    return !!e && (e.name === 'PasswordException' || /password/i.test(e.message || ''));
+  }
+
+  $('pdf-file').addEventListener('change', function () {
+    var f = this.files && this.files[0];
+    P.edits = []; renderPdfEdits();
+    P.encrypted = false; P.mode = 'text'; P.doc = null;
+    if (!f) return;
+    clearError('pdf');
+    if (!/\.pdf$/i.test(f.name)) { showError('pdf', 'That is not a PDF file. Please pick a .pdf file.'); return; }
+    busy('pdf', 'Opening the PDF…');
+    f.arrayBuffer().then(function (buf) {
+      var head = new Uint8Array(buf.slice(0, 5));
+      if (String.fromCharCode.apply(null, head) !== '%PDF-') {
+        showError('pdf', 'This file does not look like a real PDF.'); setStatus('pdf', '', false); return;
+      }
+      P.bytes = new Uint8Array(buf); P.name = f.name;
+      $('pdf-fileinfo').style.display = 'block';
+      $('pdf-fileinfo').innerHTML = '<b>' + f.name + '</b> — ' + Math.round(f.size / 1024) + ' KB';
+      return openPdf(buf);
+    }).catch(function (e) {
+      showError('pdf', 'This PDF could not be opened: ' + (e && e.message ? e.message : e));
+      setStatus('pdf', '', false);
+    });
+  });
+
+  /* Opens the PDF with pdf.js, asking for a password when the file is
+     locked (up to 3 tries). A password that opened the file marks the doc
+     encrypted, so Download rebuilds pages from renders — pdf-lib cannot
+     copy pages out of an encrypted source. */
+  async function openPdf(buf) {
+    var pw = null;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        var doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf), password: pw || undefined }).promise;
+        P.doc = doc; P.numPages = doc.numPages; P.pageNo = 1;
+        renderPdfPage();
+        return;
+      } catch (e) {
+        if (!isPasswordError(e)) throw e;
+        var ask = await askPdfPassword(attempt > 0 || !!pw);
+        if (ask === null || ask === '') {
+          showError('pdf', pw ? 'Wrong password for this PDF.' : 'This PDF is locked — it needs its password to open.');
+          setStatus('pdf', '', false);
+          return;
+        }
+        pw = ask; P.encrypted = true;
+      }
+    }
+    showError('pdf', 'Wrong password for this PDF.');
+    setStatus('pdf', '', false);
+  }
+
+  $('pdf-prev').addEventListener('click', function () { if (P.pageNo > 1) { P.pageNo--; renderPdfPage(); } });
+  $('pdf-next').addEventListener('click', function () { if (P.pageNo < P.numPages) { P.pageNo++; renderPdfPage(); } });
+
+  function renderPdfEdits() {
+    var ul = $('pdf-edits'); ul.innerHTML = '';
+    P.edits.forEach(function (ed, i) {
+      var li = document.createElement('li');
+      var span = document.createElement('span'); span.className = 'grow';
+      span.textContent = 'Page ' + (ed.pageIndex + 1) + ': “' + ed.oldText + '” → “' + ed.newText + '”';
+      var del = document.createElement('button'); del.textContent = 'Remove';
+      del.addEventListener('click', function () { P.edits.splice(i, 1); renderPdfEdits(); });
+      li.appendChild(span); li.appendChild(del); ul.appendChild(li);
+    });
+    $('pdf-download').disabled = !P.edits.length;
+    hideSave('pdf');
+  }
+
+  $('pdf-apply').addEventListener('click', function () {
+    if (P.sel < 0) return;
+    var nt = $('pdf-newtext').value;
+    if (!nt.trim()) { showError('pdf', 'The text is empty. To remove a line completely, type a single space and it will be cleaned off.'); return; }
+    clearError('pdf');
+    var ln = P.lines[P.sel], sm = P.samples[P.sel];
+    if (ln.ocr) {
+      /* OCR line: geometry lives in render pixels — convert to PDF user
+         units once, so the render-rebuild can paint it at any scale. */
+      P.edits.push({ pageIndex: P.pageNo - 1, ocr: true,
+        boxUser: { x: ln.px.x / P.scale, w: ln.px.w / P.scale, h: ln.px.h / P.scale,
+                   yBottom: P.pageH - (ln.px.y + ln.px.h) / P.scale },
+        oldText: ln.text, newText: nt, bg: sm.bg, textColor: sm.text });
+    } else {
+      P.edits.push({ pageIndex: P.pageNo - 1, line: { x: ln.x, baseline: ln.baseline, width: ln.width, fontSize: ln.fontSize },
+                     fontKey: Core.pickStdFont(ln.fontName), oldText: ln.text, newText: nt,
+                     bg: sm.bg, textColor: sm.text });
+    }
+    renderPdfEdits();
+    setStatus('pdf', 'Change saved. Add more changes, or tap "Make edited PDF", then Download.', true);
+  });
+
+  /* Vector path: copy the source pages with pdf-lib and draw the covers +
+     new text in PDF units. Only possible when the source is NOT encrypted
+     and every edit came from a real text layer. */
+  async function buildViaCopy() {
+    var src = await PDFLib.PDFDocument.load(P.bytes.slice());
+    var out = await PDFLib.PDFDocument.create();
+    var idx = src.getPageIndices();
+    var copied = await out.copyPages(src, idx);
+    var fonts = {};
+    for (var i = 0; i < idx.length; i++) out.addPage(copied[i]);
+    for (var e = 0; e < P.edits.length; e++) {
+      var ed = P.edits[e];
+      var page = out.getPage(ed.pageIndex);
+      if (!fonts[ed.fontKey]) fonts[ed.fontKey] = await out.embedFont(PDFLib.StandardFonts[ed.fontKey]);
+      var box = Core.lineBox(ed.line);
+      page.drawRectangle({ x: box.x, y: box.yBottom, width: box.w, height: box.h,
+        color: PDFLib.rgb(ed.bg.r / 255, ed.bg.g / 255, ed.bg.b / 255) });
+      if (ed.newText.trim()) {
+        page.drawText(ed.newText, { x: ed.line.x, y: ed.line.baseline, size: ed.line.fontSize,
+          font: fonts[ed.fontKey],
+          color: PDFLib.rgb(ed.textColor.r / 255, ed.textColor.g / 255, ed.textColor.b / 255) });
+      }
+    }
+    return out.save();
+  }
+
+  /* Render path: rebuild every page from its (unlocked) render, painting
+     the edits onto the pixels — used for OCR edits and for encrypted
+     sources, whose pages pdf-lib cannot copy. The output pages are images,
+     exactly like the Photo Editor's output — visually identical, text not
+     selectable. */
+  async function buildViaRender() {
+    var out = await PDFLib.PDFDocument.create();
+    for (var p = 1; p <= P.numPages; p++) {
+      var page = await P.doc.getPage(p);
+      var unit = page.getViewport({ scale: 1 });
+      var s = Math.max(1.5, Math.min(2.2, 1700 / unit.width));
+      var vp = page.getViewport({ scale: s });
+      var cv = document.createElement('canvas');
+      cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      P.edits.forEach(function (ed) {
+        if (ed.pageIndex !== p - 1) return;
+        var bx, baseline, fontPx, tx;
+        if (ed.ocr) {
+          bx = { x: ed.boxUser.x * s, y: (unit.height - (ed.boxUser.yBottom + ed.boxUser.h)) * s,
+                 w: ed.boxUser.w * s, h: ed.boxUser.h * s };
+          ctx.fillStyle = Core.css(ed.bg); ctx.fillRect(bx.x, bx.y, bx.w, bx.h);
+          if (!ed.newText.trim()) return;
+          var plan = Core.planPhotoText({ x0: bx.x, y0: bx.y, x1: bx.x + bx.w, y1: bx.y + bx.h },
+            function (size) { ctx.font = size + 'px Arial, sans-serif'; return ctx.measureText(ed.newText).width; });
+          ctx.font = plan.size + 'px Arial, sans-serif';
+          ctx.fillStyle = Core.css(ed.textColor); ctx.textBaseline = 'alphabetic';
+          ctx.fillText(ed.newText, plan.x, plan.baseline);
+        } else {
+          bx = Core.userBoxToPx(Core.lineBox(ed.line), s, unit.height);
+          ctx.fillStyle = Core.css(ed.bg); ctx.fillRect(bx.x, bx.y, bx.w, bx.h);
+          if (!ed.newText.trim()) return;
+          fontPx = ed.line.fontSize * s;
+          ctx.font = fontPx + 'px Arial, sans-serif';
+          var wNow = ctx.measureText(ed.newText).width, wMax = Math.max(bx.w, ed.line.width * s) * 1.02;
+          if (wNow > wMax && wNow > 0) { fontPx = fontPx * (wMax / wNow); ctx.font = fontPx + 'px Arial, sans-serif'; }
+          ctx.fillStyle = Core.css(ed.textColor); ctx.textBaseline = 'alphabetic';
+          ctx.fillText(ed.newText, ed.line.x * s, (unit.height - ed.line.baseline) * s);
+        }
+      });
+      var blob = await new Promise(function (res) { cv.toBlob(res, 'image/jpeg', 0.92); });
+      if (!blob) throw new Error('Page ' + p + ' could not be rebuilt.');
+      var img = await out.embedJpg(new Uint8Array(await blob.arrayBuffer()));
+      var pg = out.addPage([unit.width, unit.height]);
+      pg.drawImage(img, { x: 0, y: 0, width: unit.width, height: unit.height });
+      page.cleanup();
+    }
+    return out.save();
+  }
+
+  $('pdf-download').addEventListener('click', function () {
+    if (!P.bytes || !P.edits.length) return;
+    hideSave('pdf');
+    clearError('pdf'); busy('pdf', 'Building the edited PDF…');
+    (async function () {
+      try {
+        var editsOnOcr = P.edits.some(function (e) { return e.ocr;});
+        var bytes;
+        if (editsOnOcr || P.encrypted) bytes = await buildViaRender();
+        else {
+          try { bytes = await buildViaCopy(); }
+          catch (copyErr) { bytes = await buildViaRender(); }
+        }
+        showSave('pdf', new Blob([bytes], { type: 'application/pdf' }),
+          P.name.replace(/\.pdf$/i, '') + '-edited.pdf');
+      } catch (err) {
+        showError('pdf', 'The edited PDF could not be built: ' + (err && err.message ? err.message : err));
+        setStatus('pdf', '', false);
+      }
+    })();
+  });
+
+  /* ================================================================
+     PHOTO TEXT EDITOR (Beta)
+     ================================================================ */
+  var H = { words: [], sel: -1, loaded: false, name: 'photo' };
+
+  function drawPhOverlay() {
+    var ov = $('ph-overlay'), cv = $('ph-canvas'), ctx = ov.getContext('2d');
+    ov.width = cv.width; ov.height = cv.height;
+    ctx.clearRect(0, 0, ov.width, ov.height);
+    H.words.forEach(function (wd, i) {
+      var b = wd.box;
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = (i === H.sel) ? '#E5484D' : 'rgba(59,130,246,0.9)';
+      ctx.fillStyle = (i === H.sel) ? 'rgba(229,72,77,0.18)' : 'rgba(59,130,246,0.10)';
+      ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+      ctx.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+    });
+  }
+
+  function renderPhWords() {
+    var box = $('ph-words'); box.innerHTML = '';
+    H.words.forEach(function (wd, i) {
+      var b = document.createElement('button');
+      b.textContent = wd.text;
+      if (i === H.sel) b.className = 'sel';
+      b.addEventListener('click', function () { selectPhWord(i); });
+      box.appendChild(b);
+    });
+  }
+
+  function selectPhWord(i) {
+    H.sel = i;
+    var w = H.words[i];
+    var cv = $('ph-canvas'), ctx = cv.getContext('2d');
+    var img = ctx.getImageData(0, 0, cv.width, cv.height);
+    var sm = Core.sampleRegion(img.data, cv.width, cv.height,
+      { x: w.box.x0, y: w.box.y0, w: w.box.x1 - w.box.x0, h: w.box.y1 - w.box.y0 });
+    w.sample = sm;
+    $('ph-oldword').textContent = w.text;
+    $('ph-swatch-text').style.background = Core.css(sm.text);
+    $('ph-swatch-bg').style.background = Core.css(sm.bg);
+    /* Same pre-fill rule as the PDF editor: edit the word itself. */
+    if (w) $('photo-newword').value = w.text;
+    $('ph-editbox').style.display = 'block';
+    drawPhOverlay(); renderPhWords();
+  }
+
+  $('ph-overlay').addEventListener('click', function (ev) {
+    var ov = $('ph-overlay'), r = ov.getBoundingClientRect();
+    var px = (ev.clientX - r.left) * (ov.width / r.width);
+    var py = (ev.clientY - r.top) * (ov.height / r.height);
+    for (var i = 0; i < H.words.length; i++) {
+      var b = H.words[i].box;
+      if (px >= b.x0 && px <= b.x1 && py >= b.y0 && py <= b.y1) { selectPhWord(i); return; }
+    }
+  });
+
+  $('ph-file').addEventListener('change', function () {
+    var f = this.files && this.files[0];
+    if (!f) return;
+    clearError('ph');
+    if (!/^image\//.test(f.type) && !/\.(jpe?g|png|webp|bmp)$/i.test(f.name)) {
+      showError('ph', 'That is not a photo. Please pick an image file.'); return;
+    }
+    H.name = f.name.replace(/\.[^.]+$/, '') || 'photo';
+    $('ph-fileinfo').style.display = 'block';
+    $('ph-fileinfo').innerHTML = '<b>' + f.name + '</b> — ' + Math.round(f.size / 1024) + ' KB';
+    busy('ph', 'Loading the photo…');
+    var url = URL.createObjectURL(f);
+    var img = new Image();
+    img.onload = function () {
+      URL.revokeObjectURL(url);
+      var cv = $('ph-canvas');
+      var maxSide = 2600, w = img.naturalWidth, h = img.naturalHeight;
+      var s = Math.min(1, maxSide / Math.max(w, h));
+      cv.width = Math.round(w * s); cv.height = Math.round(h * s);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      $('ph-wrap').style.display = 'block';
+      H.loaded = true; H.words = []; H.sel = -1;
+      $('ph-ocr').disabled = false; $('ph-download').disabled = false; hideSave('ph');
+      $('ph-editbox').style.display = 'none'; renderPhWords(); drawPhOverlay();
+      setStatus('ph', s < 1 ? 'Photo loaded (made a little smaller so the app stays fast). Tap “Find text in this photo”.'
+                            : 'Photo loaded. Tap “Find text in this photo”.', true);
+    };
+    img.onerror = function () {
+      URL.revokeObjectURL(url);
+      showError('ph', 'This photo could not be opened. Try a JPG or PNG photo.');
+      setStatus('ph', '', false);
+    };
+    img.src = url;
+  });
+
+  $('ph-ocr').addEventListener('click', function () {
+    if (!H.loaded) return;
+    clearError('ph');
+    if (!window.Tesseract) { showError('ph', 'The text finder is not available in this build.'); return; }
+    busy('ph', 'Finding the words — the first run can take a little while…');
+    var worker = null;
+    (async function () {
+      try {
+        worker = await Tesseract.createWorker('eng', '1', {
+          workerPath: 'libs/ocr/worker.min.js',
+          corePath: 'libs/ocr',
+          langPath: 'libs/ocr',
+          cacheMethod: 'none',
+          gzip: true,
+          logger: function (m) {
+            if (m.status === 'recognizing text') busy('ph', 'Finding the words… ' + Math.round(m.progress * 100) + '%');
+          }
+        });
+        var res = await worker.recognize($('ph-canvas'));
+        await worker.terminate(); worker = null;
+        H.words = Core.wordsFromOcr(res.data);
+        H.sel = -1;
+        $('ph-editbox').style.display = 'none';
+        drawPhOverlay(); renderPhWords();
+        if (H.words.length) setStatus('ph', H.words.length + ' words found. Tap a word to change it.', true);
+        else setStatus('ph', 'No clear words were found. A sharper, straight-on photo of printed text works best.', false);
+      } catch (e) {
+        if (worker) { try { await worker.terminate(); } catch (e2) {} }
+        showError('ph', 'The words could not be read: ' + (e && e.message ? e.message : e));
+        setStatus('ph', '', false);
+      }
+    })();
+  });
+
+  $('ph-apply').addEventListener('click', function () {
+    if (H.sel < 0) return;
+    var nt = $('photo-newword').value;
+    if (!nt.trim()) { showError('ph', 'Type the replacement word first.'); return; }
+    clearError('ph');
+    var wd = H.words[H.sel];
+    var cv = $('ph-canvas'), ctx = cv.getContext('2d');
+    var img = ctx.getImageData(0, 0, cv.width, cv.height);
+    var box = { x: wd.box.x0, y: wd.box.y0, w: wd.box.x1 - wd.box.x0, h: wd.box.y1 - wd.box.y0 };
+    var sm = wd.sample || Core.sampleRegion(img.data, cv.width, cv.height, box);
+    Core.eraseBoxPhoto(img.data, cv.width, cv.height, box, 3);
+    ctx.putImageData(img, 0, 0);
+    var plan = Core.planPhotoText(wd.box, function (size) {
+      ctx.font = size + 'px Arial, sans-serif';
+      return ctx.measureText(nt).width;
+    });
+    ctx.font = plan.size + 'px Arial, sans-serif';
+    ctx.fillStyle = Core.css(sm.text);
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(nt, plan.x, plan.baseline);
+    H.words = []; H.sel = -1;
+    $('ph-editbox').style.display = 'none';
+    drawPhOverlay(); renderPhWords();
+    setStatus('ph', 'Word replaced. Tap "Make edited photo", then Download — or tap “Find text in this photo” again to change another word.', true);
+  });
+
+  $('ph-download').addEventListener('click', function () {
+    if (!H.loaded) return;
+    hideSave('ph');
+    var fmt = $('ph-format').value;
+    $('ph-canvas').toBlob(function (blob) {
+      if (blob) showSave('ph', blob, H.name + '-edited.' + (fmt === 'png' ? 'png' : 'jpg'));
+    }, 'image/' + fmt, 0.92);
+  });
+})();
+</script>
+
+<style>
+body{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:90;display:flex;align-items:flex-end;background:#121A28;border-top:1px solid #263449;box-shadow:0 -10px 30px rgba(0,0,0,.5);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.bnav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;color:#9CA3AF;text-decoration:none;font-size:10.5px;font-weight:600;border-radius:12px;font-family:system-ui,sans-serif}
+.bnav a .bi{font-size:21px;line-height:1.15}
+.bnav a.on{color:#3B82F6}
+.bnav a.bnav-scan .bi{display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#38BDF8,#2563EB);font-size:25px;margin-top:-27px;box-shadow:0 10px 22px rgba(37,99,235,.5);border:3px solid #0A0F18}
+.bnav a.bnav-scan.on{color:#7DD3FC}
+</style>
+<nav class="bnav" aria-label="Main">
+  <a href="/" data-nav="home"><span class="bi">🏠</span>Home</a>
+  <a href="/tools.html" data-nav="tools"><span class="bi">🧰</span>All Tools</a>
+  <a href="/tools/scanner.html" class="bnav-scan" data-nav="scan"><span class="bi">📷</span>Scan</a>
+  <a href="/#history" data-nav="history"><span class="bi">🕘</span>History</a>
+  <a href="/settings.html" data-nav="settings"><span class="bi">⚙️</span>Settings</a>
+</nav>
+
+</body>
+</html>

@@ -1,0 +1,1857 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:,">
+<title>Image Tools — Link To QR</title>
+<!--
+  STAGING / TEST PAGE — not the live app. All libraries are LOCAL files in ./libs/
+  (see libs/VERSIONS.txt). No CDN, no network calls: every photo is processed
+  on-device in the browser (Note 18). Every tool ends in a real Download (Note 8.9).
+  Uploads validate the file and show plain errors instead of hanging (Note 17).
+  HD rule (Note 8.10): every photo tool has a Normal download (free, for everyone)
+  and an HD download (Premium). HD is REAL: full original resolution and higher
+  quality — Normal caps the longest side at 1600 px and uses quality 0.85.
+  The editor on this page is a normal photo editor (adjust / draw / add your own
+  text). It does NOT rewrite text that is already inside a photo — that separate
+  hard problem is not claimed here (Note 8.6 honesty rule).
+-->
+<style>
+  :root{
+    --bg:#0A0F18; --surface:#121A28; --surface2:#1A2436; --line:#263449;
+    --text:#F3F4F6; --muted:#9CA3AF; --primary:#3B82F6; --primary-dark:#1D4ED8;
+    --red:#F97066; --radius:14px; --shadow:0 8px 24px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
+  header{padding:16px;border-bottom:1px solid var(--line);background:#101A2C;position:sticky;top:0;z-index:5}
+  header h1{margin:0;font-size:20px;letter-spacing:.2px}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  main{max-width:860px;margin:0 auto;padding:16px 14px 60px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+  .toolbtn{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    color:var(--text);padding:14px 10px;font-size:14px;font-weight:700;cursor:pointer;text-align:left}
+  .toolbtn small{display:block;color:var(--muted);font-weight:500;font-size:12px;margin-top:3px}
+  .toolbtn.active{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
+  .panel{display:none;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;box-shadow:var(--shadow)}
+  .panel.open{display:block}
+  .panel h2{margin:0 0 4px;font-size:17px}
+  .panel .hint{color:var(--muted);font-size:13px;margin:0 0 14px}
+  label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}
+  input[type=text],input[type=number],input[type=password],select{
+    width:100%;background:var(--surface2);border:1px solid var(--line);border-radius:10px;
+    color:var(--text);padding:11px 12px;font-size:15px}
+  input[type=file]{width:100%;background:var(--surface2);border:1px dashed var(--line);
+    border-radius:10px;color:var(--text);padding:12px;font-size:14px}
+  input[type=range]{width:100%;accent-color:var(--primary)}
+  input[type=color]{width:52px;height:38px;background:var(--surface2);border:1px solid var(--line);
+    border-radius:10px;padding:3px;vertical-align:middle}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>div{flex:1;min-width:130px}
+  button.go{margin-top:16px;width:100%;background:var(--primary);color:#FFFFFF;border:0;
+    border-radius:12px;padding:13px;font-size:15px;font-weight:800;cursor:pointer}
+  button.go:disabled{opacity:.45;cursor:not-allowed}
+  button.go.hd{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+  .lock{display:inline-block;background:#3A2E12;color:#F5C451;border:1px solid #7A5B1A;
+    border-radius:999px;font-size:11px;padding:2px 8px;margin-left:6px;font-weight:700;vertical-align:1px}
+  .fileinfo{display:none;margin-top:10px;font-size:13px;color:var(--muted)}
+  .fileinfo b{color:var(--text)}
+  .status{margin-top:14px;font-size:14px;min-height:20px}
+  .status.ok{color:var(--primary)}
+  .error{display:none;margin-top:12px;background:#3A1D1A;border:1px solid #7A271A;color:#FECDCA;
+    padding:10px 12px;border-radius:10px;font-size:14px}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--muted);
+    border-top-color:var(--primary);border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:-2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  ul.pick{list-style:none;margin:12px 0 0;padding:0}
+  ul.pick li{display:flex;align-items:center;gap:8px;background:var(--surface2);
+    border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:14px}
+  ul.pick li.dragging{opacity:.4}
+  ul.pick .handle{cursor:grab;color:var(--muted);font-size:17px;user-select:none}
+  ul.pick .fname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  ul.pick img.thumb{width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+  ul.pick button{background:none;border:1px solid var(--line);color:var(--text);border-radius:8px;
+    padding:4px 8px;cursor:pointer;font-size:13px}
+  .note{font-size:12px;color:var(--muted);margin-top:10px}
+  .previewwrap{margin-top:14px;text-align:center}
+  canvas.preview,img.preview{max-width:100%;border:1px solid var(--line);border-radius:10px;
+    background:conic-gradient(#26292D 25%,#1B1E22 0 50%,#26292D 0 75%,#1B1E22 0);background-size:18px 18px}
+  .cropwrap{position:relative;display:inline-block;max-width:100%;line-height:0}
+  .cropwrap img{display:block;max-width:100%;border-radius:10px}
+  .cropbox{position:absolute;border:2px solid var(--primary);
+    box-shadow:0 0 0 9999px rgba(0,0,0,.5);cursor:move;touch-action:none}
+  .cropbox .hd{position:absolute;width:18px;height:18px;background:var(--primary);border:2px solid #FFFFFF;
+    border-radius:50%;touch-action:none}
+  .cropbox .hd.nw{left:-10px;top:-10px;cursor:nwse-resize}
+  .cropbox .hd.ne{right:-10px;top:-10px;cursor:nesw-resize}
+  .cropbox .hd.sw{left:-10px;bottom:-10px;cursor:nesw-resize}
+  .cropbox .hd.se{right:-10px;bottom:-10px;cursor:nwse-resize}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .btnrow button{flex:1;min-width:90px;background:var(--surface2);border:1px solid var(--line);
+    color:var(--text);border-radius:10px;padding:10px;font-size:13px;font-weight:700;cursor:pointer}
+  .btnrow button.on{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
+  .swatches{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .sw{width:36px;height:36px;border-radius:9px;border:2px solid var(--line);cursor:pointer;padding:0}
+  .sw.sel{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)}
+  .val{color:var(--primary);font-weight:800}
+</style>
+
+<style id="ltqr-redesign">
+/* ===== Link To QR redesign layer (presentation only) ===== */
+body{background-image:radial-gradient(1100px 480px at 50% -140px, rgba(37,99,235,.10), transparent 70%)}
+header{background:linear-gradient(180deg,var(--surface2),#101A2C)}
+header h1{display:flex;align-items:center;gap:12px}
+header h1::before{content:"🖼️";display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:13px;font-size:22px;background:linear-gradient(135deg,#38BDF8,#0369A1);box-shadow:0 8px 18px rgba(37,99,235,.35);flex:0 0 auto}
+.panel{border-radius:18px;box-shadow:0 14px 34px rgba(0,0,0,.42)}
+.toolbtn{border-radius:16px;transition:transform .12s ease,border-color .12s ease,box-shadow .12s ease}
+.toolbtn:hover{transform:translateY(-1px);border-color:#3A4149}
+button.go{border-radius:14px;box-shadow:0 10px 24px rgba(59,130,246,.25);letter-spacing:.02em}
+input[type=text],input[type=number],input[type=password],select{border-radius:12px}
+input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(59,130,246,.22)}
+</style>
+</head>
+<body>
+<div style="position:sticky;top:0;z-index:60;background:rgba(15,17,19,.97);border-bottom:1px solid #263449;padding:9px 14px;font-family:system-ui,sans-serif;display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+  <a href="/" style="color:#EDF1F0;text-decoration:none;font-weight:800">▦ Link To QR</a>
+  <a href="/tools/pdf-tools.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">PDF Tools</a>
+  <a href="/tools/image-tools.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Photo Tools</a>
+  <a href="/tools/scanner.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Scanner</a>
+  <a href="/tools/text-edit.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Text Edit</a>
+  <span style="margin-left:auto;display:flex;gap:12px">
+    <a href="/premium.html" style="color:#FFC95C;text-decoration:none;font-size:13.5px;font-weight:700">Premium</a>
+    <a href="/login.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Login</a>
+  </span>
+</div>
+<button type="button" id="ltqrBack" style="display:inline-flex;align-items:center;gap:6px;margin:12px 14px 0;padding:8px 18px;border:1px solid #263449;border-radius:999px;background:#121A28;color:#EDF1F0;font:600 14px system-ui,sans-serif;cursor:pointer">← Back</button>
+<script>
+document.getElementById('ltqrBack').addEventListener('click', function(){
+  try { if (window.history.length > 1) { window.history.back(); return; } } catch(e){}
+  try { window.location.href = '/'; } catch(e){}
+});
+</script>
+<header>
+  <h1>🖼️ Image Tools</h1>
+  <p>All photos are processed on your device. Nothing is uploaded to any server.</p>
+</header>
+<main>
+  <div class="grid" id="toolgrid">
+    <button class="toolbtn" data-tool="jpg2pdf">JPG to PDF<small>Many photos into one PDF</small></button>
+    <button class="toolbtn" data-tool="compress">Image Compress<small>Smaller file, same photo</small></button>
+    <button class="toolbtn" data-tool="resize">Image Resize<small>By pixels or by percent</small></button>
+    <button class="toolbtn" data-tool="targetkb">Photo Size (Target KB)<small>Shrink — or grow — to a size</small></button>
+    <button class="toolbtn" data-tool="convert">Format Converter<small>JPG / PNG / WebP</small></button>
+    <button class="toolbtn" data-tool="crop">Crop Photo<small>Drag crop box, rotate, flip</small></button>
+    <button class="toolbtn" data-tool="editor">Photo Editor<small>Adjust, filters, draw, add text</small></button>
+    <button class="toolbtn" data-tool="passport">Passport Photo Maker<small>Print-ready sheet of copies</small></button>
+  </div>
+
+  <!-- JPG to PDF -->
+  <section class="panel" id="panel-jpg2pdf">
+    <h2>JPG to PDF</h2>
+    <p class="hint">Add photos, drag them into order, and get one PDF. Each photo becomes one page.</p>
+    <label>Photos (you can add more than once)</label>
+    <input type="file" accept="image/*" multiple data-pick-multi>
+    <ul class="pick" id="jpg2pdf-list"></ul>
+    <label>Page size</label>
+    <select id="jpg2pdf-page">
+      <option value="fit">Fit photo (page = photo size)</option>
+      <option value="a4">A4 page (photo fitted inside)</option>
+    </select>
+    <button class="go" data-run="jpg2pdf">Make PDF</button>
+    <button class="go hd" data-hd="jpg2pdf">Make HD PDF<span class="lock">🔒 Premium</span></button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Compress -->
+  <section class="panel" id="panel-compress">
+    <h2>Image Compress</h2>
+    <p class="hint">Makes the photo file smaller. Lower quality = smaller file.</p>
+    <label>Photo</label>
+    <input type="file" accept="image/*" data-pick>
+    <div class="fileinfo"></div>
+    <label>Quality: <span class="val" id="cmp-q-val">80</span>%</label>
+    <input type="range" id="cmp-q" min="10" max="100" value="80">
+    <div class="fileinfo" id="cmp-estimate" style="display:none"></div>
+    <div class="previewwrap"><canvas class="preview" id="cmp-preview" style="display:none"></canvas></div>
+    <button class="go" data-run="compress">Compress</button>
+    <button class="go hd" data-hd="compress">Make HD (full size)<span class="lock">🔒 Premium</span></button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Resize -->
+  <section class="panel" id="panel-resize">
+    <h2>Image Resize</h2>
+    <p class="hint">Change the photo's pixel size — type pixels, or just give a percent.</p>
+    <label>Photo</label>
+    <input type="file" accept="image/*" data-pick>
+    <div class="fileinfo"></div>
+    <div class="row">
+      <div><label>Width (px)</label><input type="number" id="rz-w" min="1"></div>
+      <div><label>Height (px)</label><input type="number" id="rz-h" min="1"></div>
+      <div><label>Percent (%)</label><input type="number" id="rz-pct" min="1" max="800" value="100"></div>
+    </div>
+    <label style="font-weight:500"><input type="checkbox" id="rz-lock" checked> Keep the same shape (lock width : height)</label>
+    <div class="previewwrap"><canvas class="preview" id="rz-preview" style="display:none"></canvas></div>
+    <button class="go" data-run="resize">Resize</button>
+    <button class="go hd" data-hd="resize">Make HD quality<span class="lock">🔒 Premium</span></button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Target KB -->
+  <section class="panel" id="panel-targetkb">
+    <h2>Photo Size — Target KB</h2>
+    <p class="hint">Shrink a photo to fit under a target size (handy for online forms), or grow a small photo up to a minimum size.</p>
+    <label>Photo</label>
+    <input type="file" accept="image/*" data-pick>
+    <div class="fileinfo"></div>
+    <div class="row">
+      <div><label>Mode</label>
+        <select id="tk-mode">
+          <option value="under">Shrink to UNDER target</option>
+          <option value="over">Grow to AT LEAST target</option>
+        </select></div>
+      <div><label>Target size (KB)</label><input type="number" id="tk-kb" value="100" min="10" max="20480"></div>
+    </div>
+    <button class="go" data-run="targetkb">Make Size</button>
+    <button class="go hd" data-hd="targetkb">Make HD (full resolution)<span class="lock">🔒 Premium</span></button>
+    <p class="note">HD keeps the full original resolution and only lowers quality to reach the target. If even the lowest quality is too big at full resolution, HD will say so honestly — use Normal then.</p>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Format converter -->
+  <section class="panel" id="panel-convert">
+    <h2>Format Converter</h2>
+    <p class="hint">Change a photo between JPG, PNG and WebP.</p>
+    <label>Photo</label>
+    <input type="file" accept="image/*" data-pick>
+    <div class="fileinfo"></div>
+    <div class="row">
+      <div><label>Convert to</label>
+        <select id="cv-format">
+          <option value="jpeg">JPG</option>
+          <option value="png">PNG</option>
+          <option value="webp">WebP</option>
+        </select></div>
+      <div><label>Quality (JPG / WebP): <span class="val" id="cv-q-val">90</span>%</label>
+        <input type="range" id="cv-q" min="10" max="100" value="90"></div>
+    </div>
+    <div class="previewwrap"><canvas class="preview" id="cv-preview" style="display:none"></canvas></div>
+    <button class="go" data-run="convert">Convert</button>
+    <button class="go hd" data-hd="convert">Make HD (full size)<span class="lock">🔒 Premium</span></button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Crop -->
+  <section class="panel" id="panel-crop">
+    <h2>Crop Photo</h2>
+    <p class="hint">Drag the green box to choose the part you keep. Drag its corners to resize it.</p>
+    <label>Photo</label>
+    <input type="file" accept="image/*" data-pick>
+    <div class="fileinfo"></div>
+    <label>Crop shape</label>
+    <select id="cr-aspect">
+      <option value="0">Free</option>
+      <option value="1">Square (1:1)</option>
+      <option value="0.75">3 : 4</option>
+      <option value="0.8">4 : 5</option>
+      <option value="0.7778">Passport (35 × 45)</option>
+      <option value="1.7778">Wide (16:9)</option>
+    </select>
+    <div class="btnrow">
+      <button data-cr-rot="-90">⟲ Rotate left</button>
+      <button data-cr-rot="90">⟳ Rotate right</button>
+      <button data-cr-flip="h">↔ Flip sideways</button>
+      <button data-cr-flip="v">↕ Flip up-down</button>
+    </div>
+    <div class="previewwrap"><div class="cropwrap" id="cr-wrap" style="display:none">
+      <img id="cr-img" alt="Photo to crop">
+      <div class="cropbox" id="cr-box"><span class="hd nw"></span><span class="hd ne"></span><span class="hd sw"></span><span class="hd se"></span></div>
+    </div></div>
+    <button class="go" data-run="crop">Crop</button>
+    <button class="go hd" data-hd="crop">Make HD (full size)<span class="lock">🔒 Premium</span></button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Photo editor -->
+  <section class="panel" id="panel-editor">
+    <h2>Photo Editor</h2>
+    <p class="hint">A normal photo editor: adjust the light, use a filter, draw, and add your own text.
+      It does not change text that is already inside the photo.</p>
+    <label>Photo</label>
+    <input type="file" accept="image/*" data-pick>
+    <div class="fileinfo"></div>
+    <label>Brightness: <span class="val" id="ed-b-val">100</span>%</label>
+    <input type="range" id="ed-b" min="30" max="200" value="100">
+    <label>Contrast: <span class="val" id="ed-c-val">100</span>%</label>
+    <input type="range" id="ed-c" min="30" max="200" value="100">
+    <label>Colour (saturation): <span class="val" id="ed-s-val">100</span>%</label>
+    <input type="range" id="ed-s" min="0" max="250" value="100">
+    <label>Filter</label>
+    <select id="ed-filter">
+      <option value="">None</option>
+      <option value="grayscale(1)">Black &amp; white</option>
+      <option value="sepia(0.7)">Sepia (old photo)</option>
+      <option value="saturate(1.7) contrast(1.1)">Vivid</option>
+      <option value="sepia(0.35) saturate(1.2)">Warm</option>
+      <option value="hue-rotate(18deg) saturate(1.1)">Cool</option>
+    </select>
+    <div class="btnrow">
+      <button data-ed-mode="draw">✏️ Draw</button>
+      <button data-ed-mode="text">🔤 Add text</button>
+      <button id="ed-undo">↩ Undo drawing</button>
+    </div>
+    <div class="row">
+      <div><label>Pen / text colour</label><input type="color" id="ed-colour" value="#FF5252"></div>
+      <div><label>Pen size</label><input type="range" id="ed-pensize" min="2" max="40" value="6"></div>
+      <div><label>Your text (for Add text)</label><input type="text" id="ed-text" placeholder="Type, then tap the photo"></div>
+    </div>
+    <div class="btnrow">
+      <button data-ed-rot="-90">⟲ Rotate left</button>
+      <button data-ed-rot="90">⟳ Rotate right</button>
+      <button data-ed-flip="h">↔ Flip sideways</button>
+      <button data-ed-flip="v">↕ Flip up-down</button>
+    </div>
+    <p class="note">Note: rotating or flipping starts the drawing again (adjustments and filter are kept).</p>
+    <div class="previewwrap"><canvas class="preview" id="ed-canvas" style="display:none"></canvas></div>
+    <button class="go" data-run="editor">Save Photo</button>
+    <button class="go hd" data-hd="editor">Make HD (full size)<span class="lock">🔒 Premium</span></button>
+    <div class="error"></div><div class="status"></div>
+  </section>
+
+  <!-- Passport photo maker -->
+  <section class="panel" id="panel-passport">
+    <h2>Passport Size Photo Maker</h2>
+    <p class="hint">One photo in — a print-ready sheet of passport-size copies (35 × 45 mm) out.
+      Drag the green box over the face. The crop box is always the upright 35 × 45 passport shape —
+      a wide photo is centre-cropped into it. The Paper setting below decides how the copies sit
+      on the sheet (on Landscape paper they turn sideways on the sheet, studio style).</p>
+    <label>Photo</label>
+    <input type="file" accept="image/*" data-pick>
+    <div class="fileinfo"></div>
+    <label>Background</label>
+    <div class="swatches" id="pp-bg-swatches">
+      <button class="sw sel" data-bg="keep" title="Keep original background" style="background:repeating-conic-gradient(#3a3f45 0 25%,#24272b 0 50%) 0 0/12px 12px"></button>
+      <button class="sw" data-bg="#FFFFFF" title="White" style="background:#FFFFFF"></button>
+      <button class="sw" data-bg="#438EDB" title="Blue" style="background:#438EDB"></button>
+      <button class="sw" data-bg="#87CEEB" title="Light blue" style="background:#87CEEB"></button>
+      <button class="sw" data-bg="#9AA0A6" title="Grey" style="background:#9AA0A6"></button>
+      <button class="sw" data-bg="#D32F2F" title="Red" style="background:#D32F2F"></button>
+      <button class="sw" data-bg="custom" title="Custom colour" style="background:linear-gradient(135deg,#f00,#ff0,#0f0,#00f)"></button>
+      <input type="color" id="pp-bg-custom" value="#87CEEB" title="Custom background colour">
+    </div>
+    <label style="font-weight:500"><input type="checkbox" id="pp-rm-bg"> Remove background first, then fill the colour above
+      (works best on photos taken against a plain wall — done on your device, no internet)</label>
+    <label>Background-remove strength: <span class="val" id="pp-tol-val">32</span></label>
+    <input type="range" id="pp-tol" min="10" max="80" value="32">
+    <div class="row">
+      <div><label>Copies on the sheet</label>
+        <select id="pp-copies"><option>4</option><option>6</option><option selected>8</option><option>12</option><option>16</option><option>24</option><option>30</option><option value="custom">Custom…</option></select>
+        <input type="number" id="pp-copies-custom" min="1" max="60" value="10" style="display:none;margin-top:8px" aria-label="Custom copies"></div>
+      <div><label>Sheet (paper)</label>
+        <select id="pp-sheet"><option value="a4" selected>A4</option><option value="4x6">4 × 6 inch photo paper</option></select></div>
+    </div>
+    <label>Paper orientation</label>
+    <select id="pp-orient">
+      <option value="portrait" selected>Paper: Portrait — upright sheet</option>
+      <option value="landscape">Paper: Landscape — wide sheet</option>
+    </select>
+    <p class="note">Your crop always stays 35 × 45 upright — this setting is only about the paper. On Landscape paper the sheet turns wide and each photo turns sideways on the sheet to fit it, like studio sheets.</p>
+    <label style="font-weight:500"><input type="checkbox" id="pp-border" checked> Thin cutting border around each copy</label>
+    <div class="previewwrap"><div class="cropwrap" id="pp-wrap" style="display:none">
+      <img id="pp-img" alt="Photo for passport sheet">
+      <div class="cropbox" id="pp-box"><span class="hd nw"></span><span class="hd ne"></span><span class="hd sw"></span><span class="hd se"></span></div>
+    </div></div>
+    <div class="previewwrap"><canvas class="preview" id="pp-sheet-preview" style="display:none"></canvas></div>
+    <button class="go" data-run="passport">Make Sheet</button>
+    <button class="go hd" data-hd="passport">Make HD sheet (300 DPI, print quality)<span class="lock">🔒 Premium</span></button>
+    <p class="note">Normal sheet is 150 DPI (fine for screen sharing). HD sheet is 300 DPI — the quality print shops ask for. Face size and sheet size are the same in both.</p>
+    <div class="error"></div><div class="status"></div>
+  </section>
+</main>
+<script src="libs/pdf-lib.min.js"></script>
+<script id="img-core">
+/* ImgCore — pure image-tool logic. No DOM in here, so the Node test suite
+   (tests/image_tests.js) loads this exact block and tests the same code the
+   page runs. Canvas/DOM work lives in the UI script below. */
+(function(root){
+'use strict';
+var Core = {};
+
+/* ----- Note 8.10: Normal vs HD export plans (HD is genuinely higher) ----- */
+Core.NORMAL = { maxDim: 1600, quality: 0.85 };
+Core.HD     = { maxDim: 0,    quality: 0.97 };  /* maxDim 0 = never downscale */
+
+Core.fmtKB = function(bytes){
+  if(bytes >= 1048576) return (bytes/1048576).toFixed(2)+' MB';
+  return Math.max(1, Math.round(bytes/1024))+' KB';
+};
+Core.mmToPx = function(mm, dpi){ return Math.round(mm / 25.4 * dpi); };
+
+/* Output dims under an export plan: downscale only, longest side capped. */
+Core.planDims = function(w, h, plan){
+  if(!plan || !plan.maxDim) return { w: w, h: h };
+  var m = Math.max(w, h);
+  if(m <= plan.maxDim) return { w: w, h: h };
+  var s = plan.maxDim / m;
+  return { w: Math.max(1, Math.round(w*s)), h: Math.max(1, Math.round(h*s)) };
+};
+
+/* ----- Resize math ----- */
+/* o = { pct } OR { tw, th, lock } — numbers may be 0/empty for "unset". */
+Core.resizeDims = function(w, h, o){
+  o = o || {};
+  var nw, nh;
+  if(o.pct){
+    nw = Math.round(w * o.pct / 100); nh = Math.round(h * o.pct / 100);
+  } else if(o.lock){
+    if(o.tw && o.th){
+      var s = Math.min(o.tw / w, o.th / h);
+      nw = Math.round(w * s); nh = Math.round(h * s);
+    } else if(o.tw){ nw = o.tw; nh = Math.round(o.tw * h / w); }
+    else if(o.th){ nh = o.th; nw = Math.round(o.th * w / h); }
+    else { nw = w; nh = h; }
+  } else {
+    nw = o.tw || w; nh = o.th || h;
+  }
+  return { w: Math.max(1, nw), h: Math.max(1, nh) };
+};
+
+/* Fit (w,h) inside a box, preserving shape. Upscaling allowed (page fit). */
+Core.fitDims = function(w, h, boxW, boxH){
+  var s = Math.min(boxW / w, boxH / h);
+  return { w: Math.max(1, Math.round(w * s)), h: Math.max(1, Math.round(h * s)), scale: s };
+};
+
+/* ----- Crop math ----- */
+Core.MIN_CROP = 10;
+Core.cropClamp = function(box, W, H){
+  var b = { x: box.x, y: box.y, w: box.w, h: box.h };
+  b.w = Math.min(Math.max(b.w, Core.MIN_CROP), W);
+  b.h = Math.min(Math.max(b.h, Core.MIN_CROP), H);
+  b.x = Math.min(Math.max(b.x, 0), W - b.w);
+  b.y = Math.min(Math.max(b.y, 0), H - b.h);
+  return b;
+};
+/* Resize a crop box to the given aspect (w/h), keeping its centre. */
+Core.cropAspect = function(box, aspect, W, H){
+  var cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+  var w = box.w, h = w / aspect;
+  if(h > box.h && box.h * aspect < w){ /* grow from height instead */ }
+  if(h > H){ h = H; w = h * aspect; }
+  if(w > W){ w = W; h = w / aspect; }
+  if(h > H){ h = H; w = h * aspect; }
+  var b = { x: Math.round(cx - w/2), y: Math.round(cy - h/2), w: Math.round(w), h: Math.round(h) };
+  return Core.cropClamp(b, W, H);
+};
+
+/* ----- Target-KB engine (Note 8.8) ----- */
+/* encode(scale, quality) -> Promise<{ size, data }>. The ladder walks down
+   until something fits under targetBytes, then quality is refined upward at
+   that scale (max 4 extra encodes). Total encodes are bounded (<= 15). */
+Core.SIZE_LADDER = [
+  { s: 1.00, q: 0.85 }, { s: 0.85, q: 0.80 }, { s: 0.70, q: 0.75 },
+  { s: 0.55, q: 0.70 }, { s: 0.45, q: 0.62 }, { s: 0.36, q: 0.55 },
+  { s: 0.28, q: 0.50 }, { s: 0.22, q: 0.45 }, { s: 0.16, q: 0.40 }
+];
+Core.targetUnder = async function(encode, targetBytes, ladder){
+  ladder = ladder || Core.SIZE_LADDER;
+  var smallest = null;
+  for(var i = 0; i < ladder.length; i++){
+    var step = ladder[i];
+    var r = await encode(step.s, step.q);
+    r = { size: r.size, data: r.data, scale: step.s, quality: step.q };
+    if(!smallest || r.size < smallest.size) smallest = r;
+    if(r.size <= targetBytes){
+      var best = r, lo = step.q, hi = 0.98;
+      for(var k = 0; k < 4; k++){
+        var mid = (lo + hi) / 2;
+        var r2 = await encode(step.s, mid);
+        if(r2.size <= targetBytes){ best = { size: r2.size, data: r2.data, scale: step.s, quality: mid }; lo = mid; }
+        else hi = mid;
+      }
+      best.found = true;
+      return best;
+    }
+  }
+  smallest.found = false;
+  return smallest;
+};
+/* HD variant: scale stays 1 (full resolution), only quality walks down. */
+Core.HD_QUALITIES = [0.97, 0.90, 0.82, 0.74, 0.66, 0.58, 0.50, 0.42, 0.34, 0.26, 0.20];
+Core.targetUnderHD = async function(encode, targetBytes){
+  var ladder = Core.HD_QUALITIES.map(function(q){ return { s: 1, q: q }; });
+  return Core.targetUnder(encode, targetBytes, ladder);
+};
+/* Grow mode: encode(scale) -> Promise<{size,data}> with a lossless format.
+   Steps up the scale until the file reaches the target (98% of it counts). */
+Core.GROW_SCALES = [1, 1.5, 2, 2.5, 3, 4];
+Core.targetOver = async function(encode, targetBytes){
+  var best = null;
+  for(var i = 0; i < Core.GROW_SCALES.length; i++){
+    var s = Core.GROW_SCALES[i];
+    var r = await encode(s);
+    r = { size: r.size, data: r.data, scale: s };
+    if(!best || r.size > best.size) best = r;
+    if(r.size >= targetBytes * 0.98){ best.reached = true; return best; }
+  }
+  best.reached = false;
+  return best;
+};
+
+/* ----- Passport sheet layout (Note 8.3): photo 35 x 45 mm ----- */
+Core.PASSPORT_W_MM = 35;
+Core.PASSPORT_H_MM = 45;
+/* Centre crop-fill geometry: the source rectangle (in source pixels) that
+   fills a destination box completely — overflow cropped symmetrically.
+   NEVER rotates the source and NEVER squeezes it (aspect is preserved):
+   a landscape photo going into a portrait slot is cropped at the sides,
+   not turned sideways. */
+Core.coverFit = function(srcW, srcH, dstW, dstH){
+  var scale = Math.max(dstW / srcW, dstH / srcH);
+  var sw = Math.min(srcW, Math.round(dstW / scale));
+  var sh = Math.min(srcH, Math.round(dstH / scale));
+  return { sx: Math.round((srcW - sw) / 2), sy: Math.round((srcH - sh) / 2),
+           sw: sw, sh: sh, rotated: false };
+};
+Core.passportLayout = function(o){
+  var dpi = o.dpi;
+  var landscape = o.orientation === 'landscape';
+  var gapMm = (o.gapMm == null ? 3 : o.gapMm);
+  var marginMm = (o.marginMm == null ? 6 : o.marginMm);
+  /* The PAPER orientation decides how photos sit ON THE SHEET (studio
+     style). Portrait paper: upright sheet, upright 35 x 45 slots, photos
+     upright. Landscape paper: the sheet dims swap (wide sheet) AND the
+     slots turn 45 x 35 — each photo is drawn rotated 90 degrees into its
+     slot on the sheet (see drawSheetPhoto). The CROP is never affected:
+     the cropped photo itself is always the upright 35 x 45 image. */
+  var sheetW = Core.mmToPx(landscape ? o.sheetHmm : o.sheetWmm, dpi),
+      sheetH = Core.mmToPx(landscape ? o.sheetWmm : o.sheetHmm, dpi);
+  var fullW = Core.mmToPx(landscape ? Core.PASSPORT_H_MM : Core.PASSPORT_W_MM, dpi),
+      fullH = Core.mmToPx(landscape ? Core.PASSPORT_W_MM : Core.PASSPORT_H_MM, dpi);
+  var gap = Core.mmToPx(gapMm, dpi), margin = Core.mmToPx(marginMm, dpi);
+  var n = Math.max(1, Math.floor(o.copies) || 1);
+  /* AUTO-FIT (Ayan 19:41): the user picks only the paper and the count.
+     EVERY requested photo goes on the one sheet: we search the columns x
+     rows grid that gives the largest cells, cap cells at the true
+     35 x 45 mm size, and shrink them proportionally (aspect locked) when
+     the count needs more room. Nothing is dropped, cropped or stretched,
+     and nothing ever leaves the paper. `capacity` still reports how many
+     fit at FULL size, for information only. */
+  var capCols = Math.max(1, Math.floor((sheetW - 2*margin + gap) / (fullW + gap)));
+  var capRows = Math.max(1, Math.floor((sheetH - 2*margin + gap) / (fullH + gap)));
+  var capacity = capCols * capRows;
+  var aspect = fullW / fullH; /* slot w/h — 35:45 portrait, 45:35 landscape */
+  var availW = sheetW - 2 * margin, availH = sheetH - 2 * margin;
+  var best = null;
+  for(var c = 1; c <= n; c++){
+    var r = Math.ceil(n / c);
+    var cw = (availW - (c - 1) * gap) / c;
+    var ch = (availH - (r - 1) * gap) / r;
+    var w = Math.min(cw, ch * aspect), h = w / aspect;
+    if(w > fullW){ w = fullW; h = fullH; }
+    var area = w * h;
+    if(!best || area >= best.area) best = { cols: c, rows: r, w: w, h: h, area: area };
+  }
+  var cols = best.cols, rows = best.rows;
+  var cellW = Math.max(1, Math.floor(best.w)), cellH = Math.max(1, Math.floor(best.h));
+  var blockH = rows * cellH + (rows - 1) * gap;
+  var y0 = Math.round((sheetH - blockH) / 2);
+  var cells = [];
+  for(var i = 0; i < n; i++){
+    var row = Math.floor(i / cols);
+    /* Each row is centred on its own, so a short last row (or a count below
+       one full row) sits in the middle of the sheet — never left-hanging. */
+    var inRow = Math.min(cols, n - row * cols);
+    var rowW = inRow * cellW + (inRow - 1) * gap;
+    var rowX0 = Math.round((sheetW - rowW) / 2);
+    cells.push({
+      x: rowX0 + (i % cols) * (cellW + gap),
+      y: y0 + row * (cellH + gap),
+      w: cellW, h: cellH
+    });
+  }
+  return { sheetW: sheetW, sheetH: sheetH, cellW: cellW, cellH: cellH,
+           fullW: fullW, fullH: fullH, shrunk: cellW < fullW - 1,
+           cols: cols, rows: rows, capacity: capacity, cells: cells,
+           rotated: landscape,
+           orientation: landscape ? 'landscape' : 'portrait' };
+};
+/* Draws one cropped passport photo into a sheet cell with CONTAIN-fit: the
+   whole photo is always visible, centred in the slot, aspect untouched —
+   never cropped, never stretched. The photo canvas is always the upright
+   35 x 45 crop; on Landscape paper (rotated=true) it is turned 90 degrees
+   so it fits the wide 45 x 35 slot, exactly like studio sheets — the
+   rotation happens here, on the sheet, never at crop time. */
+Core.drawSheetPhoto = function(ctx, photo, cell, rotated){
+  if(!rotated){
+    var s = Math.min(cell.w / photo.width, cell.h / photo.height);
+    var dw = photo.width * s, dh = photo.height * s;
+    ctx.drawImage(photo, cell.x + (cell.w - dw) / 2, cell.y + (cell.h - dh) / 2, dw, dh);
+    return;
+  }
+  var s2 = Math.min(cell.w / photo.height, cell.h / photo.width);
+  var dw2 = photo.height * s2, dh2 = photo.width * s2;
+  ctx.save();
+  ctx.translate(cell.x + cell.w / 2, cell.y + cell.h / 2);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(photo, -dh2 / 2, -dw2 / 2, dh2, dw2);
+  ctx.restore();
+};
+
+/* ----- On-device background removal (Note 8.3, free — no API) ----- */
+/* Method: guess the background colour from the 4 corners, flood-fill inward
+   from the photo edges through pixels close to that colour, feather the edge.
+   Honest limit: works on plain backgrounds; busy backgrounds will leak. */
+Core.bgColour = function(data, w, h){
+  var pts = [[0,0],[w-1,0],[0,h-1],[w-1,h-1]], r = 0, g = 0, b = 0, n = 0;
+  var patch = Math.min(4, Math.floor(Math.min(w, h) / 2) || 1);
+  for(var c = 0; c < pts.length; c++){
+    for(var dy = 0; dy < patch; dy++) for(var dx = 0; dx < patch; dx++){
+      var x = Math.min(w-1, Math.max(0, pts[c][0] + (pts[c][0] === 0 ? dx : -dx)));
+      var y = Math.min(h-1, Math.max(0, pts[c][1] + (pts[c][1] === 0 ? dy : -dy)));
+      var i = (y * w + x) * 4;
+      r += data[i]; g += data[i+1]; b += data[i+2]; n++;
+    }
+  }
+  return [Math.round(r/n), Math.round(g/n), Math.round(b/n)];
+};
+Core.floodAlpha = function(data, w, h, tol){
+  var bg = Core.bgColour(data, w, h);
+  var tol2 = tol * tol * 3; /* squared euclidean over 3 channels, tol = per-channel-ish */
+  var total = w * h;
+  var alpha = new Uint8Array(total).fill(255);
+  var seen = new Uint8Array(total);
+  var stack = new Int32Array(total);
+  var sp = 0;
+  function isBg(idx){
+    var i = idx * 4;
+    var dr = data[i] - bg[0], dg = data[i+1] - bg[1], db = data[i+2] - bg[2];
+    return (dr*dr + dg*dg + db*db) <= tol2;
+  }
+  function push(idx){
+    if(!seen[idx] && isBg(idx)){ seen[idx] = 1; stack[sp++] = idx; }
+  }
+  var x, y;
+  for(x = 0; x < w; x++){ push(x); push((h-1)*w + x); }
+  for(y = 0; y < h; y++){ push(y*w); push(y*w + (w-1)); }
+  while(sp > 0){
+    var cur = stack[--sp];
+    alpha[cur] = 0;
+    var cx = cur % w, cy = (cur / w) | 0;
+    if(cx > 0) push(cur - 1);
+    if(cx < w - 1) push(cur + 1);
+    if(cy > 0) push(cur - w);
+    if(cy < h - 1) push(cur + w);
+  }
+  return alpha;
+};
+Core.featherAlpha = function(alpha, w, h){
+  var out = new Uint8Array(alpha.length);
+  for(var y = 0; y < h; y++) for(var x = 0; x < w; x++){
+    var sum = 0, n = 0;
+    for(var dy = -1; dy <= 1; dy++) for(var dx = -1; dx <= 1; dx++){
+      var xx = x + dx, yy = y + dy;
+      if(xx >= 0 && xx < w && yy >= 0 && yy < h){ sum += alpha[yy*w + xx]; n++; }
+    }
+    out[y*w + x] = Math.round(sum / n);
+  }
+  return out;
+};
+/* Composite RGBA pixel data over a solid colour using an alpha mask. */
+Core.compositeOver = function(data, alpha, rgb){
+  var out = new Uint8ClampedArray(data.length);
+  for(var p = 0, i = 0; i < data.length; i += 4, p++){
+    var a = alpha[p] / 255;
+    out[i]   = Math.round(data[i]   * a + rgb[0] * (1 - a));
+    out[i+1] = Math.round(data[i+1] * a + rgb[1] * (1 - a));
+    out[i+2] = Math.round(data[i+2] * a + rgb[2] * (1 - a));
+    out[i+3] = 255;
+  }
+  return out;
+};
+
+root.ImgCore = Core;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>
+(function(){
+'use strict';
+var Core = window.ImgCore;
+var PDFLib = window.PDFLib;
+
+/* ---------- small helpers (same pattern as pdf-tools.html) ---------- */
+function $(sel, root){ return (root||document).querySelector(sel); }
+function fmtKB(b){ return Core.fmtKB(b); }
+function baseName(name){ return (name||'photo').replace(/\.[a-z0-9]+$/i,''); }
+function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+
+
+
+function download(blob, filename){
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+}
+
+/* ---------- two-step Convert -> Download ----------
+   Convert only produces a pending result (nothing is saved). The separate
+   Download button then saves exactly those converted bytes through the
+   normal download() path (gate + bridge). Every image tool produces ONE
+   file, so after saving in the app the file also opens directly (the
+   manual Open button stays as a fallback). */
+var pendingResults = {};
+function resultBox(tool){
+  var panel = panelEl(tool); if(!panel) return null;
+  var box = panel.querySelector('.resultbox');
+  if (box) return box;
+  box = document.createElement('div');
+  box.className = 'resultbox';
+  box.style.cssText = 'display:none;margin-top:14px;background:#0E2A52;border:1px solid #3B82F6;border-radius:12px;padding:12px 14px';
+  var info = document.createElement('div');
+  info.className = 'rinfo';
+  info.style.cssText = 'font-size:14px;margin-bottom:10px';
+  box.appendChild(info);
+  var btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'go'; btn.style.marginTop = '0';
+  btn.textContent = '⬇ Download';
+  btn.addEventListener('click', function(){ doDownload(tool); });
+  box.appendChild(btn);
+  var st = panel.querySelector('.status');
+  if (st) panel.insertBefore(box, st); else panel.appendChild(box);
+  return box;
+}
+function hideResult(tool){
+  pendingResults[tool] = null;
+  window.__ltqrAutoOpenNext = false;
+  var panel = panelEl(tool); if(!panel) return;
+  var box = panel.querySelector('.resultbox');
+  if (box) box.style.display = 'none';
+}
+function setResult(tool, files, detail){
+  pendingResults[tool] = files;
+  var box = resultBox(tool); if(!box) return;
+  var total = 0; files.forEach(function(f){ total += f.blob.size; });
+  box.querySelector('.rinfo').textContent = files.length === 1
+    ? '✅ Ready: ' + files[0].name + ' (' + fmtKB(files[0].blob.size) + ')'
+    : '✅ Ready: ' + files.length + ' files (' + fmtKB(total) + ' total)';
+  box.style.display = 'block';
+  setStatus(tool, (detail ? detail + ' ' : '') + 'Tap Download to save.', true);
+}
+async function doDownload(tool){
+  var files = pendingResults[tool];
+  if (!files || !files.length) return;
+  var box = resultBox(tool);
+  var btn = box ? box.querySelector('button') : null;
+  if (btn) btn.disabled = true;
+  if (files.length === 1){
+    window.__ltqrAutoOpenNext = true;
+    download(files[0].blob, files[0].name);
+    setStatus(tool, 'Saved: ' + files[0].name, true);
+  } else {
+    window.__ltqrAutoOpenNext = false;
+    for (var i = 0; i < files.length; i++){
+      setStatus(tool, 'Saving file ' + (i + 1) + ' of ' + files.length + '…');
+      download(files[i].blob, files[i].name);
+      if (i < files.length - 1) await sleep(350);
+    }
+    setStatus(tool, 'Saved ' + files.length + ' file(s).', true);
+  }
+  if (btn) btn.disabled = false;
+}
+function panelEl(tool){ return document.getElementById('panel-'+tool); }
+function setStatus(tool, html, ok){
+  var st = $('.status', panelEl(tool)); if(!st) return;
+  st.innerHTML = html || ''; st.className = 'status' + (ok ? ' ok' : '');
+}
+var ERROR_CODES = { jpg2pdf:'IMG-01', compress:'IMG-02', resize:'IMG-03', targetkb:'IMG-04', convert:'IMG-05', crop:'IMG-06', editor:'IMG-07', passport:'IMG-08' };
+function setError(tool, msg){
+  var er = $('.error', panelEl(tool)); if(!er) return;
+  if (msg) msg = msg + ' [Code: ' + (ERROR_CODES[tool] || 'IMG-00') + ']';
+  er.textContent = msg || ''; er.style.display = msg ? 'block' : 'none';
+}
+function setBusy(tool, busy){
+  panelEl(tool).querySelectorAll('[data-run],[data-hd]').forEach(function(b){ b.disabled = busy; });
+  if(busy) setStatus(tool, '<span class="spin"></span> Working… please wait.');
+}
+function makeCanvas(w, h){
+  var c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h));
+  return c;
+}
+function drawTo(img, w, h, opt){
+  opt = opt || {};
+  var c = makeCanvas(w, h), ctx = c.getContext('2d');
+  if(opt.bg){ ctx.fillStyle = opt.bg; ctx.fillRect(0, 0, c.width, c.height); }
+  if(opt.filter) ctx.filter = opt.filter;
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  ctx.filter = 'none';
+  return c;
+}
+function canvasBlob(canvas, mime, q){
+  return new Promise(function(res){ canvas.toBlob(res, mime, q); });
+}
+
+/* ---------- Note 8.10: the HD gate ---------- */
+/* If the app shell provides AppGate.requirePremium('hd'), its answer decides.
+   On this staging page there is no gate, so HD shows its Premium lock message
+   (the button is visibly locked — it never pretends to download). */
+async function hdAllowed(tool){
+  if(window.AppGate && typeof window.AppGate.requirePremium === 'function'){
+    var ok = false;
+    try { ok = await window.AppGate.requirePremium('hd'); } catch(e){ ok = false; }
+    if(ok) return true;
+    setStatus(tool, 'HD quality is a Premium feature.', false);
+    return false;
+  }
+  setStatus(tool, '🔒 HD quality is a Premium feature. Normal quality is free for everyone.', false);
+  return false;
+}
+
+/* ---------- file picking + validation (Note 17) ---------- */
+function sniffKind(buf){
+  if(buf.length < 12) return null;
+  if(buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'jpeg';
+  if(buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'png';
+  if(buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+     buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return 'webp';
+  if(buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'gif';
+  if(buf[0] === 0x42 && buf[1] === 0x4D) return 'bmp';
+  return null;
+}
+function loadImage(url){
+  return new Promise(function(resolve, reject){
+    var img = new Image();
+    var timer = setTimeout(function(){ reject(new Error('That photo took too long to open. It may be damaged.')); }, 25000);
+    img.onload = function(){ clearTimeout(timer); resolve(img); };
+    img.onerror = function(){ clearTimeout(timer); reject(new Error('That photo could not be opened. It may be damaged.')); };
+    img.src = url;
+  });
+}
+async function readImageFile(file){
+  if(!file) throw new Error('Please choose a photo first.');
+  var looksImage = (file.type && file.type.indexOf('image/') === 0) ||
+    /\.(jpe?g|png|webp|gif|bmp)$/i.test(file.name);
+  var buf = new Uint8Array(await file.arrayBuffer());
+  var kind = sniffKind(buf);
+  if(!looksImage || !kind){
+    throw new Error('"'+file.name+'" is not a photo. Please choose a JPG, PNG or WebP photo.');
+  }
+  var url = URL.createObjectURL(file);
+  try {
+    var img = await loadImage(url);
+  } catch(e) { URL.revokeObjectURL(url); throw e; }
+  return { file: file, name: file.name, url: url, img: img,
+           w: img.naturalWidth, h: img.naturalHeight, bytes: buf.length, kind: kind };
+}
+
+/* Single-photo pickers: picked[tool] = decoded state. onState(tool, state|null) optional. */
+var picked = {};
+function wirePicker(tool, onState){
+  var panel = panelEl(tool);
+  var input = $('[data-pick]', panel);
+  if(!input) return;
+  input.addEventListener('change', async function(){
+    setError(tool, ''); setStatus(tool, '');
+    var info = $('.fileinfo', panel);
+    var file = input.files[0];
+    if(!file){ picked[tool] = null; if(info) info.style.display = 'none'; if(onState) onState(null); return; }
+    try {
+      setStatus(tool, '<span class="spin"></span> Opening photo…');
+      var st = await readImageFile(file);
+      if(picked[tool] && picked[tool].url) URL.revokeObjectURL(picked[tool].url);
+      picked[tool] = st;
+      if(info){
+        info.innerHTML = '<b>'+st.name+'</b> — '+st.w+' × '+st.h+' px, '+fmtKB(st.bytes);
+        info.style.display = 'block';
+      }
+      setStatus(tool, 'Photo ready.', true);
+      if(onState) onState(st);
+    } catch(e) {
+      picked[tool] = null;
+      if(info) info.style.display = 'none';
+      input.value = '';
+      setStatus(tool, ''); setError(tool, e.message);
+      if(onState) onState(null);
+    }
+  });
+}
+function needState(tool){
+  var st = picked[tool];
+  if(!st) throw new Error('Please choose a photo first.');
+  return st;
+}
+
+/* ---------- tool switching ---------- */
+var grid = document.getElementById('toolgrid');
+grid.addEventListener('click', function(e){
+  var btn = e.target.closest('[data-tool]'); if(!btn) return;
+  document.querySelectorAll('.toolbtn').forEach(function(b){ b.classList.toggle('active', b === btn); });
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('open'); });
+  panelEl(btn.dataset.tool).classList.add('open');
+});
+
+/* ---------- runners registry: run(tool, hd) ---------- */
+var runners = {};
+function wireButtons(tool){
+  var runBtn = $('[data-run="'+tool+'"]', panelEl(tool));
+  var hdBtn = $('[data-hd="'+tool+'"]', panelEl(tool));
+  async function go(hd){
+    setError(tool, ''); setStatus(tool, '');
+    hideResult(tool);
+    if(hd && !(await hdAllowed(tool))) return;
+    setBusy(tool, true);
+    try { await runners[tool](hd); }
+    catch(e){ setStatus(tool, ''); setError(tool, e.message || 'Something went wrong. Please try again.'); }
+    setBusy(tool, false);
+  }
+  if(runBtn) runBtn.addEventListener('click', function(){ go(false); });
+  if(hdBtn) hdBtn.addEventListener('click', function(){ go(true); });
+}
+
+/* ================= JPG to PDF (Note 8.2) ================= */
+var pdfPhotos = [];
+var jpgList = document.getElementById('jpg2pdf-list');
+function renderJpgList(){
+  jpgList.innerHTML = '';
+  pdfPhotos.forEach(function(st, idx){
+    var li = document.createElement('li');
+    li.draggable = true; li.dataset.idx = idx;
+    li.innerHTML = '<span class="handle">⠿</span><img class="thumb" alt=""><span class="fname"></span>' +
+      '<button data-mv="-1">↑</button><button data-mv="1">↓</button><button data-rm="1">✕</button>';
+    $('.thumb', li).src = st.url;
+    $('.fname', li).textContent = st.name + ' ('+st.w+'×'+st.h+')';
+    li.addEventListener('dragstart', function(){ li.classList.add('dragging'); });
+    li.addEventListener('dragend', function(){ li.classList.remove('dragging'); });
+    li.addEventListener('dragover', function(e){ e.preventDefault(); });
+    li.addEventListener('drop', function(e){
+      e.preventDefault();
+      var from = +jpgList.querySelector('.dragging').dataset.idx;
+      var to = +li.dataset.idx;
+      if(from === to) return;
+      var moved = pdfPhotos.splice(from, 1)[0];
+      pdfPhotos.splice(to, 0, moved);
+      renderJpgList();
+    });
+    li.addEventListener('click', function(e){
+      var mv = e.target.dataset.mv, rm = e.target.dataset.rm;
+      if(rm){ URL.revokeObjectURL(pdfPhotos[idx].url); pdfPhotos.splice(idx, 1); renderJpgList(); return; }
+      if(mv){
+        var j = idx + (+mv);
+        if(j < 0 || j >= pdfPhotos.length) return;
+        var t = pdfPhotos[idx]; pdfPhotos[idx] = pdfPhotos[j]; pdfPhotos[j] = t;
+        renderJpgList();
+      }
+    });
+    jpgList.appendChild(li);
+  });
+}
+$('[data-pick-multi]', panelEl('jpg2pdf')).addEventListener('change', async function(){
+  var input = this;
+  setError('jpg2pdf', ''); setStatus('jpg2pdf', '');
+  var files = Array.prototype.slice.call(input.files);
+  if(!files.length) return;
+  try {
+    setBusy('jpg2pdf', true);
+    for(var i = 0; i < files.length; i++){
+      setStatus('jpg2pdf', '<span class="spin"></span> Opening '+files[i].name+'…');
+      pdfPhotos.push(await readImageFile(files[i]));
+    }
+    renderJpgList();
+    setStatus('jpg2pdf', pdfPhotos.length+' photo(s) ready. Drag to set the order.', true);
+  } catch(e) { setError('jpg2pdf', e.message); }
+  setBusy('jpg2pdf', false);
+  input.value = '';
+});
+runners.jpg2pdf = async function(hd){
+  if(!pdfPhotos.length) throw new Error('Please add at least one photo.');
+  var plan = hd ? Core.HD : Core.NORMAL;
+  var pageMode = $('#jpg2pdf-page').value;
+  var doc = await PDFLib.PDFDocument.create();
+  for(var i = 0; i < pdfPhotos.length; i++){
+    var st = pdfPhotos[i];
+    setStatus('jpg2pdf', '<span class="spin"></span> Adding photo '+(i+1)+' of '+pdfPhotos.length+'…');
+    var dims = Core.planDims(st.w, st.h, plan);
+    var c = drawTo(st.img, dims.w, dims.h, { bg: '#FFFFFF' });
+    var blob = await canvasBlob(c, 'image/jpeg', plan.quality);
+    var img = await doc.embedJpg(new Uint8Array(await blob.arrayBuffer()));
+    if(pageMode === 'a4'){
+      var page = doc.addPage([595.28, 841.89]);
+      var fit = Core.fitDims(dims.w, dims.h, 595.28 - 72, 841.89 - 72);
+      page.drawImage(img, { x: (595.28 - fit.w) / 2, y: (841.89 - fit.h) / 2, width: fit.w, height: fit.h });
+    } else {
+      var scale = 72 / 150; /* treat photo pixels as 150 DPI on the page */
+      var pg = doc.addPage([dims.w * scale, dims.h * scale]);
+      pg.drawImage(img, { x: 0, y: 0, width: dims.w * scale, height: dims.h * scale });
+    }
+  }
+  var bytes = await doc.save();
+  setResult('jpg2pdf', [{ blob: new Blob([bytes], { type: 'application/pdf' }), name: 'photos.pdf' }],
+    'Done — photos.pdf made ('+doc.getPageCount()+' pages, '+fmtKB(bytes.length)+(hd ? ', HD' : '')+').');
+};
+
+/* ================= Image Compress ================= */
+runners.compress = async function(hd){
+  var st = needState('compress');
+  var q = parseInt($('#cmp-q').value, 10) / 100;
+  var plan = hd ? Core.HD : Core.NORMAL;
+  var dims = Core.planDims(st.w, st.h, plan);
+  var c = drawTo(st.img, dims.w, dims.h, { bg: '#FFFFFF' });
+  var blob = await canvasBlob(c, 'image/jpeg', q);
+  if(!blob) throw new Error('Could not compress this photo.');
+  setResult('compress', [{ blob: blob, name: baseName(st.name)+'-compressed.jpg' }],
+    'Done — '+fmtKB(st.bytes)+' → '+fmtKB(blob.size)+' ('+dims.w+' × '+dims.h+' px'+(hd ? ', HD full size' : '')+').');
+};
+
+/* ================= Image Resize ================= */
+var rzSyncing = false;
+function rzRead(){
+  return { tw: parseInt($('#rz-w').value, 10) || 0, th: parseInt($('#rz-h').value, 10) || 0,
+           lock: $('#rz-lock').checked };
+}
+function rzShowPreview(){
+  var st = picked.resize; if(!st) return;
+  var o = rzRead();
+  var d = Core.resizeDims(st.w, st.h, o);
+  var pc = $('#rz-preview');
+  var cap = Core.planDims(d.w, d.h, { maxDim: 700 });
+  pc.width = cap.w; pc.height = cap.h;
+  pc.getContext('2d').drawImage(st.img, 0, 0, cap.w, cap.h);
+  pc.style.display = 'block';
+}
+function rzSync(from){
+  var st = picked.resize; if(!st || rzSyncing) return;
+  rzSyncing = true;
+  var o = rzRead();
+  if(from === 'pct'){
+    var p = parseFloat($('#rz-pct').value) || 100;
+    var d = Core.resizeDims(st.w, st.h, { pct: p });
+    $('#rz-w').value = d.w; $('#rz-h').value = d.h;
+  } else {
+    var d2 = Core.resizeDims(st.w, st.h, o);
+    if(from === 'w' && o.lock) $('#rz-h').value = d2.h;
+    if(from === 'h' && o.lock) $('#rz-w').value = d2.w;
+    $('#rz-pct').value = Math.round(d2.w / st.w * 100);
+  }
+  rzSyncing = false;
+  rzShowPreview();
+}
+runners.resize = async function(hd){
+  var st = needState('resize');
+  var d = Core.resizeDims(st.w, st.h, rzRead());
+  var c = drawTo(st.img, d.w, d.h, { bg: '#FFFFFF' });
+  var blob = await canvasBlob(c, 'image/jpeg', hd ? Core.HD.quality : Core.NORMAL.quality);
+  if(!blob) throw new Error('Could not resize this photo.');
+  setResult('resize', [{ blob: blob, name: baseName(st.name)+'-'+d.w+'x'+d.h+'.jpg' }],
+    'Done — resized to '+d.w+' × '+d.h+' px ('+fmtKB(blob.size)+(hd ? ', HD quality' : '')+').');
+};
+
+/* ================= Photo Size — Target KB ================= */
+runners.targetkb = async function(hd){
+  var st = needState('targetkb');
+  var kb = parseInt($('#tk-kb').value, 10);
+  if(!kb || kb < 10) throw new Error('Please enter a target of at least 10 KB.');
+  var target = kb * 1024;
+  var mode = $('#tk-mode').value;
+  if(mode === 'under'){
+    if(st.bytes <= target){
+      setResult('targetkb', [{ blob: st.file, name: st.name }],
+        'This photo is already '+fmtKB(st.bytes)+' — under your '+kb+' KB target. The original file is ready.');
+      return;
+    }
+    var encode = async function(s, q){
+      var c = drawTo(st.img, Math.max(1, Math.round(st.w * s)), Math.max(1, Math.round(st.h * s)), { bg: '#FFFFFF' });
+      var b = await canvasBlob(c, 'image/jpeg', q);
+      return { size: b ? b.size : Infinity, data: b };
+    };
+    setStatus('targetkb', '<span class="spin"></span> Finding the best size under '+kb+' KB…');
+    var r = hd ? await Core.targetUnderHD(encode, target) : await Core.targetUnder(encode, target);
+    if(!r.data) throw new Error('Could not process this photo.');
+    if(hd && !r.found){
+      setStatus('targetkb', 'Even the lowest quality at full resolution is '+fmtKB(r.size)+' — bigger than '+kb+' KB. HD could not reach this target, so nothing was made. Please use Normal, which also makes the photo smaller in pixels.', false);
+      return;
+    }
+    if(r.found){
+      setResult('targetkb', [{ blob: r.data, name: baseName(st.name)+'-'+kb+'kb.jpg' }],
+        'Done — '+fmtKB(st.bytes)+' → '+fmtKB(r.size)+', under your '+kb+' KB target'+(hd ? ' at full resolution (HD)' : '')+'.');
+    } else {
+      setResult('targetkb', [{ blob: r.data, name: baseName(st.name)+'-'+kb+'kb.jpg' }],
+        'Closest possible is '+fmtKB(r.size)+' — this photo has too much detail to fit in '+kb+' KB. The smallest version is ready.');
+    }
+  } else { /* grow */
+    if(st.bytes >= target){
+      setResult('targetkb', [{ blob: st.file, name: st.name }],
+        'This photo is already '+fmtKB(st.bytes)+' — at least your '+kb+' KB target. The original file is ready.');
+      return;
+    }
+    var encodePng = async function(s){
+      var c = drawTo(st.img, Math.round(st.w * s), Math.round(st.h * s), { bg: '#FFFFFF' });
+      var b = await canvasBlob(c, 'image/png');
+      return { size: b ? b.size : 0, data: b };
+    };
+    setStatus('targetkb', '<span class="spin"></span> Growing the photo to at least '+kb+' KB…');
+    var g = await Core.targetOver(encodePng, target);
+    if(!g.data) throw new Error('Could not process this photo.');
+    if(g.reached){
+      setResult('targetkb', [{ blob: g.data, name: baseName(st.name)+'-grown.png' }],
+        'Done — '+fmtKB(st.bytes)+' → '+fmtKB(g.size)+' (photo enlarged '+g.scale+'× and saved as PNG to reach the size).');
+    } else {
+      setResult('targetkb', [{ blob: g.data, name: baseName(st.name)+'-grown.png' }],
+        'Biggest we could make it is '+fmtKB(g.size)+' — still under '+kb+' KB. The biggest version is ready.');
+    }
+  }
+};
+
+/* ================= Format Converter ================= */
+var MIME_EXT = { jpeg: 'jpg', png: 'png', webp: 'webp' };
+runners.convert = async function(hd){
+  var st = needState('convert');
+  var fmt = $('#cv-format').value;
+  var q = parseInt($('#cv-q').value, 10) / 100;
+  var plan = hd ? Core.HD : Core.NORMAL;
+  var dims = Core.planDims(st.w, st.h, plan);
+  var c = drawTo(st.img, dims.w, dims.h, fmt === 'jpeg' ? { bg: '#FFFFFF' } : {});
+  var blob = await canvasBlob(c, 'image/'+fmt, fmt === 'png' ? undefined : q);
+  if(!blob) throw new Error('Your browser could not make a '+fmt.toUpperCase()+' file.');
+  var prev = $('#cv-preview');
+  prev.width = c.width; prev.height = c.height;
+  prev.getContext('2d').drawImage(c, 0, 0);
+  prev.style.display = 'block';
+  setResult('convert', [{ blob: blob, name: baseName(st.name)+'.'+MIME_EXT[fmt] }],
+    'Done — converted to '+fmt.toUpperCase()+' ('+dims.w+' × '+dims.h+' px, '+fmtKB(blob.size)+(hd ? ', HD' : '')+').');
+};
+/* Shared with the second UI script block (crop / editor / passport + wiring). */
+window.__imgUI = {
+  picked: picked, runners: runners, wirePicker: wirePicker, wireButtons: wireButtons,
+  rzSync: rzSync, rzShowPreview: rzShowPreview,
+  needState: needState, readImageFile: readImageFile, loadImage: loadImage,
+  $: $, panelEl: panelEl, setStatus: setStatus, setError: setError, setBusy: setBusy,
+  makeCanvas: makeCanvas, drawTo: drawTo, canvasBlob: canvasBlob, download: download,
+  setResult: setResult, doDownload: doDownload, hideResult: hideResult, pending: pendingResults,
+  fmtKB: fmtKB, baseName: baseName, sleep: sleep
+};
+})();
+</script>
+<script>
+(function(){
+'use strict';
+var Core = window.ImgCore;
+var U = window.__imgUI;
+var picked = U.picked, runners = U.runners;
+var $ = U.$, panelEl = U.panelEl, setStatus = U.setStatus, setError = U.setError;
+var makeCanvas = U.makeCanvas, drawTo = U.drawTo, canvasBlob = U.canvasBlob;
+var download = U.download, setResult = U.setResult, baseName = U.baseName;
+
+/* ================= Draggable crop box ================= */
+/* Box is stored in NATURAL pixels of the current image; the element is
+   positioned in % so it tracks the displayed (responsive) image exactly. */
+function Cropper(imgEl, boxEl, natW, natH){
+  this.imgEl = imgEl; this.boxEl = boxEl;
+  this.natW = natW; this.natH = natH;
+  this.aspect = 0; /* 0 = free */
+  var w = Math.round(natW * 0.8), h = Math.round(natH * 0.8);
+  this.box = { x: Math.round((natW - w) / 2), y: Math.round((natH - h) / 2), w: w, h: h };
+  this._wire();
+  this.render();
+}
+Cropper.prototype.setAspect = function(a){
+  this.aspect = a || 0;
+  if(this.aspect) this.box = Core.cropAspect(this.box, this.aspect, this.natW, this.natH);
+  this.box = Core.cropClamp(this.box, this.natW, this.natH);
+  this.render();
+};
+Cropper.prototype.reset = function(natW, natH){
+  this.natW = natW; this.natH = natH;
+  var w = Math.round(natW * 0.8), h = Math.round(natH * 0.8);
+  this.box = { x: Math.round((natW - w) / 2), y: Math.round((natH - h) / 2), w: w, h: h };
+  if(this.aspect) this.box = Core.cropAspect(this.box, this.aspect, this.natW, this.natH);
+  this.render();
+};
+Cropper.prototype.render = function(){
+  var b = this.box, W = this.natW, H = this.natH;
+  this.boxEl.style.left = (b.x / W * 100) + '%';
+  this.boxEl.style.top = (b.y / H * 100) + '%';
+  this.boxEl.style.width = (b.w / W * 100) + '%';
+  this.boxEl.style.height = (b.h / H * 100) + '%';
+};
+Cropper.prototype._wire = function(){
+  var self = this, drag = null;
+  function pos(e){
+    var r = self.imgEl.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width * self.natW, y: (e.clientY - r.top) / r.height * self.natH };
+  }
+  function start(e, mode){
+    e.preventDefault();
+    var p = pos(e);
+    drag = { mode: mode, sx: p.x, sy: p.y, box: { x: self.box.x, y: self.box.y, w: self.box.w, h: self.box.h } };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', end, { once: true });
+  }
+  function move(e){
+    if(!drag) return;
+    var p = pos(e), dx = p.x - drag.sx, dy = p.y - drag.sy, b = drag.box, nb;
+    if(drag.mode === 'move'){
+      nb = { x: b.x + dx, y: b.y + dy, w: b.w, h: b.h };
+    } else {
+      var x1 = b.x, y1 = b.y, x2 = b.x + b.w, y2 = b.y + b.h;
+      if(drag.mode.indexOf('e') >= 0) x2 += dx;
+      if(drag.mode.indexOf('s') >= 0) y2 += dy;
+      if(drag.mode.indexOf('w') >= 0) x1 += dx;
+      if(drag.mode.indexOf('n') >= 0) y1 += dy;
+      if(self.aspect){
+        /* keep the opposite corner fixed; height follows width */
+        var wNew = Math.abs(x2 - x1), hNew = wNew / self.aspect;
+        if(drag.mode.indexOf('n') >= 0) y1 = y2 - hNew; else y2 = y1 + hNew;
+      }
+      nb = { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) };
+    }
+    self.box = Core.cropClamp(nb, self.natW, self.natH);
+    self.render();
+  }
+  function end(){ document.removeEventListener('pointermove', move); drag = null; }
+  this.boxEl.addEventListener('pointerdown', function(e){
+    if(e.target.classList.contains('hd')) return;
+    start(e, 'move');
+  });
+  this.boxEl.querySelectorAll('.hd').forEach(function(hEl){
+    hEl.addEventListener('pointerdown', function(e){
+      e.stopPropagation();
+      start(e, hEl.classList.contains('nw') ? 'nw' : hEl.classList.contains('ne') ? 'ne' :
+               hEl.classList.contains('sw') ? 'sw' : 'se');
+    });
+  });
+};
+function cropCanvas(img, box){
+  var c = makeCanvas(box.w, box.h);
+  c.getContext('2d').drawImage(img, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
+  return c;
+}
+
+/* ================= Crop tool ================= */
+var cropper = null, cropImg = null; /* cropImg: current (possibly rotated) Image */
+function cropSetImage(img){
+  cropImg = img;
+  var el = $('#cr-img');
+  el.src = img.src;
+  $('#cr-wrap').style.display = 'inline-block';
+  if(!cropper) cropper = new Cropper(el, $('#cr-box'), img.naturalWidth, img.naturalHeight);
+  else cropper.reset(img.naturalWidth, img.naturalHeight);
+  cropper.setAspect(parseFloat($('#cr-aspect').value) || 0);
+}
+async function transformImage(img, rotDeg, flipH, flipV){
+  var rot = ((rotDeg % 360) + 360) % 360;
+  var swap = (rot === 90 || rot === 270);
+  var c = makeCanvas(swap ? img.naturalHeight : img.naturalWidth, swap ? img.naturalWidth : img.naturalHeight);
+  var ctx = c.getContext('2d');
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate(rot * Math.PI / 180);
+  ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+  ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+  var blob = await canvasBlob(c, 'image/png');
+  return U.loadImage(URL.createObjectURL(blob));
+}
+async function cropTransform(rotDeg, flip){
+  if(!cropImg) { setError('crop', 'Please choose a photo first.'); return; }
+  setError('crop', ''); setStatus('crop', '<span class="spin"></span> Turning photo…');
+  try {
+    var img = await transformImage(cropImg, rotDeg || 0, flip === 'h', flip === 'v');
+    cropSetImage(img);
+    setStatus('crop', 'Photo ready.', true);
+  } catch(e){ setStatus('crop', ''); setError('crop', e.message); }
+}
+runners.crop = async function(hd){
+  if(!cropImg || !cropper) throw new Error('Please choose a photo first.');
+  var box = cropper.box;
+  var plan = hd ? Core.HD : Core.NORMAL;
+  var full = cropCanvas(cropImg, box);
+  var dims = Core.planDims(full.width, full.height, plan);
+  var out = drawTo(full, dims.w, dims.h, { bg: '#FFFFFF' });
+  var blob = await canvasBlob(out, 'image/jpeg', plan.quality);
+  if(!blob) throw new Error('Could not crop this photo.');
+  setResult('crop', [{ blob: blob, name: 'cropped-'+box.w+'x'+box.h+'.jpg' }],
+    'Done — cropped photo made ('+dims.w+' × '+dims.h+' px'+(hd ? ', HD' : '')+').');
+};
+
+/* ================= Photo Editor ================= */
+var ed = {
+  base: null,          /* current Image (orientation baked in) */
+  paint: null,         /* paint-layer canvas at working size */
+  undoStack: [],
+  mode: null,          /* 'draw' | 'text' | null */
+  working: null        /* {w,h} working dims */
+};
+var ED_MAX = 1400;
+function edFilterString(){
+  var s = 'brightness('+$('#ed-b').value+'%) contrast('+$('#ed-c').value+'%) saturate('+$('#ed-s').value+'%)';
+  var preset = $('#ed-filter').value;
+  return preset ? s + ' ' + preset : s;
+}
+function edRender(){
+  if(!ed.base) return;
+  var view = $('#ed-canvas');
+  view.width = ed.working.w; view.height = ed.working.h;
+  var ctx = view.getContext('2d');
+  ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, view.width, view.height);
+  ctx.filter = edFilterString();
+  ctx.drawImage(ed.base, 0, 0, view.width, view.height);
+  ctx.filter = 'none';
+  if(ed.paint) ctx.drawImage(ed.paint, 0, 0);
+  view.style.display = 'block';
+}
+function edSetup(baseImg){
+  ed.base = baseImg;
+  ed.working = Core.planDims(baseImg.naturalWidth, baseImg.naturalHeight, { maxDim: ED_MAX });
+  ed.paint = makeCanvas(ed.working.w, ed.working.h);
+  ed.undoStack = [];
+  edRender();
+}
+function edSnapshot(){
+  if(!ed.paint) return;
+  var snap = makeCanvas(ed.paint.width, ed.paint.height);
+  snap.getContext('2d').drawImage(ed.paint, 0, 0);
+  ed.undoStack.push(snap);
+  if(ed.undoStack.length > 12) ed.undoStack.shift();
+}
+function edCanvasPos(e){
+  var view = $('#ed-canvas'), r = view.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * view.width, y: (e.clientY - r.top) / r.height * view.height };
+}
+var edDrawing = null;
+$('#ed-canvas').addEventListener('pointerdown', function(e){
+  if(!ed.base || !ed.mode) return;
+  e.preventDefault();
+  var p = edCanvasPos(e), ctx = ed.paint.getContext('2d');
+  if(ed.mode === 'text'){
+    var text = $('#ed-text').value.trim();
+    if(!text){ setError('editor', 'Type your text in the "Your text" box first, then tap the photo.'); return; }
+    setError('editor', '');
+    edSnapshot();
+    ctx.fillStyle = $('#ed-colour').value;
+    ctx.font = '700 ' + Math.max(16, parseInt($('#ed-pensize').value, 10) * 4) + 'px sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, p.x, p.y);
+    edRender();
+    return;
+  }
+  edSnapshot();
+  edDrawing = { last: p };
+  ctx.strokeStyle = $('#ed-colour').value;
+  ctx.lineWidth = parseInt($('#ed-pensize').value, 10);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + 0.1, p.y + 0.1); ctx.stroke();
+  edRender();
+});
+$('#ed-canvas').addEventListener('pointermove', function(e){
+  if(!edDrawing || !ed.paint) return;
+  var p = edCanvasPos(e), ctx = ed.paint.getContext('2d');
+  ctx.beginPath(); ctx.moveTo(edDrawing.last.x, edDrawing.last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+  edDrawing.last = p;
+  edRender();
+});
+document.addEventListener('pointerup', function(){ edDrawing = null; });
+async function edTransform(rotDeg, flip){
+  if(!ed.base) { setError('editor', 'Please choose a photo first.'); return; }
+  setError('editor', ''); setStatus('editor', '<span class="spin"></span> Turning photo…');
+  try {
+    var img = await transformImage(ed.base, rotDeg || 0, flip === 'h', flip === 'v');
+    edSetup(img);
+    setStatus('editor', 'Photo turned. Drawing was cleared; adjustments and filter are still on.', true);
+  } catch(e){ setStatus('editor', ''); setError('editor', e.message); }
+}
+runners.editor = async function(hd){
+  if(!ed.base) throw new Error('Please choose a photo first.');
+  var plan = hd ? Core.HD : Core.NORMAL;
+  var dims = Core.planDims(ed.base.naturalWidth, ed.base.naturalHeight, plan);
+  var out = makeCanvas(dims.w, dims.h), ctx = out.getContext('2d');
+  ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, dims.w, dims.h);
+  ctx.filter = edFilterString();
+  ctx.drawImage(ed.base, 0, 0, dims.w, dims.h);
+  ctx.filter = 'none';
+  if(ed.paint) ctx.drawImage(ed.paint, 0, 0, dims.w, dims.h);
+  var blob = await canvasBlob(out, 'image/jpeg', plan.quality);
+  if(!blob) throw new Error('Could not save the edited photo.');
+  setResult('editor', [{ blob: blob, name: 'edited-photo.jpg' }],
+    'Done — edited photo made ('+dims.w+' × '+dims.h+' px'+(hd ? ', HD' : '')+').');
+};
+
+/* ================= Passport Photo Maker ================= */
+var ppCropper = null, ppImg = null, ppBg = 'keep';
+function ppOrient(){ return $('#pp-orient').value === 'landscape' ? 'landscape' : 'portrait'; }
+function ppAspect(){
+  /* The crop box is ALWAYS the upright 35:45 passport ratio. The Paper
+     orientation selector never touches the crop — it only turns the sheet. */
+  return Core.PASSPORT_W_MM / Core.PASSPORT_H_MM;
+}
+function ppSetImage(img){
+  ppImg = img;
+  var el = $('#pp-img');
+  el.src = img.src;
+  $('#pp-wrap').style.display = 'inline-block';
+  if(!ppCropper){
+    ppCropper = new Cropper(el, $('#pp-box'), img.naturalWidth, img.naturalHeight);
+    ppCropper.setAspect(ppAspect());
+  } else {
+    ppCropper.reset(img.naturalWidth, img.naturalHeight);
+    ppCropper.setAspect(ppAspect());
+  }
+}
+function ppBgColour(){
+  if(ppBg === 'keep') return null;
+  if(ppBg === 'custom') return $('#pp-bg-custom').value;
+  return ppBg;
+}
+function hexToRgb(hex){
+  var m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if(!m) return [255, 255, 255];
+  var n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function ppSinglePhoto(dpi){
+  /* The single photo is always rendered as an upright 35 x 45 copy,
+     whatever the paper orientation is. */
+  var cellW = Core.mmToPx(Core.PASSPORT_W_MM, dpi),
+      cellH = Core.mmToPx(Core.PASSPORT_H_MM, dpi);
+  var cell = cropCanvas(ppImg, ppCropper.box);
+  /* Centre crop-fill into the slot: never rotated sideways, never squeezed. */
+  var fit = Core.coverFit(cell.width, cell.height, cellW, cellH);
+  var out = makeCanvas(cellW, cellH);
+  out.getContext('2d').drawImage(cell, fit.sx, fit.sy, fit.sw, fit.sh, 0, 0, cellW, cellH);
+  var bgHex = ppBgColour();
+  if($('#pp-rm-bg').checked){
+    var ctx = out.getContext('2d');
+    var id = ctx.getImageData(0, 0, cellW, cellH);
+    var tol = parseInt($('#pp-tol').value, 10);
+    var alpha = Core.featherAlpha(Core.floodAlpha(id.data, cellW, cellH, tol), cellW, cellH);
+    var rgb = hexToRgb(bgHex || '#FFFFFF');
+    var comp = Core.compositeOver(id.data, alpha, rgb);
+    ctx.putImageData(new ImageData(comp, cellW, cellH), 0, 0);
+  } else if(bgHex){
+    /* Without removal a flat colour cannot replace a real background — the
+       colour is only used together with "Remove background". If the source
+       photo has transparency, fill behind it so it is not left see-through. */
+    var under = makeCanvas(cellW, cellH), ux = under.getContext('2d');
+    ux.fillStyle = bgHex; ux.fillRect(0, 0, cellW, cellH);
+    ux.drawImage(out, 0, 0);
+    out = under;
+  }
+  return out;
+}
+runners.passport = async function(hd){
+  if(!ppImg || !ppCropper) throw new Error('Please choose a photo first.');
+  if(ppBg !== 'keep' && !$('#pp-rm-bg').checked){
+    setStatus('passport', 'Note: a colour background is filled after removing the old background — tick "Remove background first" to use the colour. Making the sheet with the original background now.', false);
+    await U.sleep(900);
+  }
+  var dpi = hd ? 300 : 150;
+  var copies = $('#pp-copies').value === 'custom'
+    ? Math.max(1, Math.min(60, parseInt($('#pp-copies-custom').value, 10) || 8))
+    : parseInt($('#pp-copies').value, 10);
+  var sheetSel = $('#pp-sheet').value;
+  var sheetMm = sheetSel === 'a4' ? { w: 210, h: 297 } : { w: 101.6, h: 152.4 };
+  setStatus('passport', '<span class="spin"></span> Making your sheet…');
+  var orient = ppOrient();
+  var photo = ppSinglePhoto(dpi);
+  var layout = Core.passportLayout({ dpi: dpi, sheetWmm: sheetMm.w, sheetHmm: sheetMm.h, copies: copies, orientation: orient });
+  var sheet = makeCanvas(layout.sheetW, layout.sheetH);
+  var sx = sheet.getContext('2d');
+  sx.fillStyle = '#FFFFFF'; sx.fillRect(0, 0, sheet.width, sheet.height);
+  layout.cells.forEach(function(cell){
+    Core.drawSheetPhoto(sx, photo, cell, layout.rotated);
+    if($('#pp-border').checked){
+      sx.strokeStyle = '#9AA0A6';
+      sx.lineWidth = Math.max(1, Math.round(dpi / 150));
+      sx.strokeRect(cell.x + 0.5, cell.y + 0.5, cell.w - 1, cell.h - 1);
+    }
+  });
+  var prev = $('#pp-sheet-preview');
+  prev.width = sheet.width; prev.height = sheet.height;
+  prev.getContext('2d').drawImage(sheet, 0, 0);
+  prev.style.display = 'block';
+  var blob = await canvasBlob(sheet, 'image/jpeg', 0.92);
+  if(!blob) throw new Error('Could not make the sheet.');
+  var note = layout.shrunk ? ' All '+copies+' photos are on the sheet — they were made a bit smaller so every photo fits this paper.' : '';
+  setResult('passport', [{ blob: blob, name: 'passport-sheet-'+(orient === 'landscape' ? 'landscape-' : '')+(hd ? 'hd-300dpi' : '150dpi')+'.jpg' }],
+    'Done — sheet with '+layout.cells.length+' copies ('+layout.sheetW+' × '+layout.sheetH+' px, '+dpi+' DPI, '+(orient === 'landscape' ? 'Landscape paper' : 'Portrait paper')+(hd ? ', HD' : '')+') made.'+note);
+};
+
+/* ================= wiring ================= */
+U.wirePicker('compress', function(st){
+  if(st){ cmpEstimateSoon(); }
+  else { $('#cmp-preview').style.display = 'none'; $('#cmp-estimate').style.display = 'none'; }
+});
+U.wirePicker('resize', function(st){
+  if(st){
+    $('#rz-w').value = st.w; $('#rz-h').value = st.h; $('#rz-pct').value = 100;
+    U.rzShowPreview();
+  } else $('#rz-preview').style.display = 'none';
+});
+U.wirePicker('targetkb');
+U.wirePicker('convert', function(st){
+  if(!st) $('#cv-preview').style.display = 'none';
+});
+U.wirePicker('crop', function(st){
+  if(st){
+    var img = new Image();
+    img.onload = function(){ cropSetImage(img); };
+    img.src = st.url;
+  } else { $('#cr-wrap').style.display = 'none'; cropImg = null; }
+});
+U.wirePicker('editor', function(st){
+  if(st){
+    var img = new Image();
+    img.onload = function(){ edSetup(img); };
+    img.src = st.url;
+  } else { ed.base = null; $('#ed-canvas').style.display = 'none'; }
+});
+U.wirePicker('passport', function(st){
+  if(st){
+    var img = new Image();
+    img.onload = function(){ ppSetImage(img); };
+    img.src = st.url;
+  } else { $('#pp-wrap').style.display = 'none'; ppImg = null; }
+});
+['jpg2pdf','compress','resize','targetkb','convert','crop','editor','passport'].forEach(U.wireButtons);
+
+/* compress slider + estimate */
+var cmpT = null;
+function cmpEstimateSoon(){
+  clearTimeout(cmpT);
+  cmpT = setTimeout(function(){ runners && picked.compress && cmpEstimateSafe(); }, 250);
+}
+async function cmpEstimateSafe(){
+  try { await cmpEstimateRun(); } catch(e){}
+}
+async function cmpEstimateRun(){
+  var st = picked.compress; if(!st) return;
+  var q = parseInt($('#cmp-q').value, 10) / 100;
+  $('#cmp-q-val').textContent = $('#cmp-q').value;
+  var dims = Core.planDims(st.w, st.h, Core.NORMAL);
+  var c = drawTo(st.img, dims.w, dims.h, { bg: '#FFFFFF' });
+  var prev = $('#cmp-preview');
+  prev.width = c.width; prev.height = c.height;
+  prev.getContext('2d').drawImage(c, 0, 0);
+  prev.style.display = 'block';
+  var blob = await canvasBlob(c, 'image/jpeg', q);
+  var est = $('#cmp-estimate');
+  if(blob){
+    est.innerHTML = 'Original: <b>'+U.fmtKB(st.bytes)+'</b> → about <b>'+U.fmtKB(blob.size)+'</b> at this quality (Normal size).';
+    est.style.display = 'block';
+  }
+}
+$('#cmp-q').addEventListener('input', cmpEstimateSoon);
+
+/* resize field sync */
+$('#rz-w').addEventListener('input', function(){ rzSyncSafe('w'); });
+$('#rz-h').addEventListener('input', function(){ rzSyncSafe('h'); });
+$('#rz-pct').addEventListener('input', function(){ rzSyncSafe('pct'); });
+$('#rz-lock').addEventListener('change', function(){ rzSyncSafe('w'); });
+function rzSyncSafe(from){ try { U.rzSync(from); } catch(e){} }
+
+/* convert quality label */
+$('#cv-q').addEventListener('input', function(){ $('#cv-q-val').textContent = this.value; });
+
+/* crop controls */
+$('#cr-aspect').addEventListener('change', function(){
+  if(cropper) cropper.setAspect(parseFloat(this.value) || 0);
+});
+panelEl('crop').querySelectorAll('[data-cr-rot]').forEach(function(b){
+  b.addEventListener('click', function(){ cropTransform(parseInt(b.dataset.crRot, 10), null); });
+});
+panelEl('crop').querySelectorAll('[data-cr-flip]').forEach(function(b){
+  b.addEventListener('click', function(){ cropTransform(0, b.dataset.crFlip); });
+});
+
+/* editor controls */
+['ed-b','ed-c','ed-s'].forEach(function(id){
+  $('#'+id).addEventListener('input', function(){
+    $('#'+id+'-val').textContent = this.value;
+    edRender();
+  });
+});
+$('#ed-filter').addEventListener('change', edRender);
+panelEl('editor').querySelectorAll('[data-ed-mode]').forEach(function(b){
+  b.addEventListener('click', function(){
+    ed.mode = (ed.mode === b.dataset.edMode) ? null : b.dataset.edMode;
+    panelEl('editor').querySelectorAll('[data-ed-mode]').forEach(function(x){
+      x.classList.toggle('on', x.dataset.edMode === ed.mode);
+    });
+    setStatus('editor', ed.mode === 'draw' ? 'Draw on the photo with your finger or mouse.' :
+      ed.mode === 'text' ? 'Tap the photo where the text should go.' : '', false);
+  });
+});
+$('#ed-undo').addEventListener('click', function(){
+  var snap = ed.undoStack.pop();
+  if(snap && ed.paint){
+    var ctx = ed.paint.getContext('2d');
+    ctx.clearRect(0, 0, ed.paint.width, ed.paint.height);
+    ctx.drawImage(snap, 0, 0);
+    edRender();
+  }
+});
+panelEl('editor').querySelectorAll('[data-ed-rot]').forEach(function(b){
+  b.addEventListener('click', function(){ edTransform(parseInt(b.dataset.edRot, 10), null); });
+});
+panelEl('editor').querySelectorAll('[data-ed-flip]').forEach(function(b){
+  b.addEventListener('click', function(){ edTransform(0, b.dataset.edFlip); });
+});
+
+/* passport controls */
+$('#pp-bg-swatches').addEventListener('click', function(e){
+  var b = e.target.closest('[data-bg]'); if(!b) return;
+  ppBg = b.dataset.bg;
+  this.querySelectorAll('.sw').forEach(function(x){ x.classList.toggle('sel', x === b); });
+});
+$('#pp-tol').addEventListener('input', function(){ $('#pp-tol-val').textContent = this.value; });
+/* Paper orientation changes the SHEET only — it never alters the crop box,
+   so there is deliberately no cropper update on this control. */
+})();
+</script>
+
+<style>
+/* ============ PASSPORT SECTION (full-screen takeover) ============ */
+#passport-section{position:fixed;inset:0;z-index:200;background:var(--bg);display:flex;flex-direction:column}
+.pps-top{display:flex;align-items:center;gap:10px;padding:12px 14px;background:linear-gradient(180deg,#16283F,#101A2C);border-bottom:1px solid var(--line)}
+.pps-top .pps-title{flex:1;font-size:18px;font-weight:800}
+.pps-iconbtn{background:var(--surface2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:8px 13px;font-size:14px;font-weight:700;cursor:pointer}
+.pps-body{flex:1;overflow-y:auto;padding:14px 14px 26px}
+.pps-screen{display:none}
+.pps-screen.open{display:block}
+.pps-step{font-size:12.5px;font-weight:800;letter-spacing:.6px;color:#7DD3FC;margin:16px 0 4px}
+.sheetcard{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px;margin-bottom:10px;cursor:pointer}
+.sheetcard img{width:58px;height:74px;object-fit:cover;border-radius:8px;background:#fff}
+.sheetcard .sn{font-weight:700;font-size:14.5px}
+.sheetcard .sm{color:var(--muted);font-size:12px;margin-top:2px}
+</style>
+
+<div id="passport-section" style="display:none">
+  <div class="pps-top">
+    <button class="pps-iconbtn" id="pps-back">‹ Back</button>
+    <div class="pps-title" id="pps-title">Passport Photo</div>
+    <button class="pps-iconbtn" id="pps-exit">✕ Exit</button>
+  </div>
+  <div class="pps-body" id="pps-body">
+    <div class="pps-screen" id="pps-home">
+      <button class="go" id="pps-new" style="margin-top:2px">📷 New Passport Photo</button>
+      <h3 style="margin:20px 0 8px">Saved Sheets</h3>
+      <div id="pps-list"></div>
+      <p class="note" id="pps-empty">No saved sheets yet. Sheets you make are saved here on this device only, so you can download or print them again any time.</p>
+      <div id="pps-view" style="display:none;margin-top:14px">
+        <img id="pps-view-img" alt="Saved passport sheet" style="width:100%;border-radius:12px;border:1px solid var(--line);background:#fff">
+        <div class="rowbtns">
+          <button class="mini" id="pps-view-dl">⬇ Download Again</button>
+          <button class="mini" id="pps-view-del">🗑 Delete</button>
+        </div>
+      </div>
+    </div>
+    <div class="pps-screen" id="pps-make"></div>
+  </div>
+</div>
+
+<style>
+body{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:90;display:flex;align-items:flex-end;background:#121A28;border-top:1px solid #263449;box-shadow:0 -10px 30px rgba(0,0,0,.5);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.bnav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;color:#9CA3AF;text-decoration:none;font-size:10.5px;font-weight:600;border-radius:12px;font-family:system-ui,sans-serif}
+.bnav a .bi{font-size:21px;line-height:1.15}
+.bnav a.on{color:#3B82F6}
+.bnav a.bnav-scan .bi{display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#38BDF8,#2563EB);font-size:25px;margin-top:-27px;box-shadow:0 10px 22px rgba(37,99,235,.5);border:3px solid #0A0F18}
+.bnav a.bnav-scan.on{color:#7DD3FC}
+</style>
+<nav class="bnav" aria-label="Main">
+  <a href="/" data-nav="home"><span class="bi">🏠</span>Home</a>
+  <a href="/tools.html" data-nav="tools"><span class="bi">🧰</span>All Tools</a>
+  <a href="/tools/scanner.html" class="bnav-scan" data-nav="scan"><span class="bi">📷</span>Scan</a>
+  <a href="/#history" data-nav="history"><span class="bi">🕘</span>History</a>
+  <a href="/settings.html" data-nav="settings"><span class="bi">⚙️</span>Settings</a>
+</nav>
+
+<script>
+/* ================= PASSPORT SECTION =================
+   The Passport Photo Maker as its own full-screen section: a home with
+   saved sheets (IndexedDB, on-device) and the maker as step screens.
+   The existing panel (engine, cropper, backgrounds, sheet builder) is
+   moved into the section whole, so every behaviour is unchanged. */
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+
+  /* ---- sheet store (IndexedDB; memory fallback) ---- */
+  var mem = {}, dbp = null;
+  function db(){
+    if (dbp) return dbp;
+    dbp = new Promise(function(resolve){
+      try {
+        var req = indexedDB.open('ltqr-passport', 1);
+        req.onupgradeneeded = function(){
+          if (!req.result.objectStoreNames.contains('sheets')) req.result.createObjectStore('sheets', { keyPath: 'id' });
+        };
+        req.onsuccess = function(){ resolve(req.result); };
+        req.onerror = function(){ resolve(null); };
+      } catch(e){ resolve(null); }
+    });
+    return dbp;
+  }
+  function tx(mode, fn){
+    return db().then(function(d){
+      if (!d) return fn(null);
+      return new Promise(function(resolve, reject){
+        var t = d.transaction('sheets', mode), out;
+        fn(t.objectStore('sheets'), function(v){ out = v; });
+        t.oncomplete = function(){ resolve(out); };
+        t.onerror = function(){ reject(t.error); };
+      });
+    }).catch(function(){ return fn(null); });
+  }
+  var SheetStore = {
+    all: function(){
+      return tx('readonly', function(os, done){
+        if (!os) { done(Object.keys(mem).map(function(k){ return mem[k]; })); return; }
+        var r = os.getAll(); r.onsuccess = function(){ done(r.result || []); };
+      });
+    },
+    put: function(rec){
+      mem[rec.id] = rec;
+      return tx('readwrite', function(os, done){ if (os) os.put(rec); done(true); });
+    },
+    del: function(id){
+      delete mem[id];
+      return tx('readwrite', function(os, done){ if (os) os.delete(id); done(true); });
+    }
+  };
+  window.PassportStore = SheetStore;
+
+  /* ---- screens ---- */
+  var current = 'home';
+  function show(name){
+    current = name;
+    $('pps-home').classList.toggle('open', name === 'home');
+    $('pps-make').classList.toggle('open', name === 'make');
+    $('pps-title').textContent = name === 'make' ? 'Make Passport Photo' : 'Passport Photo';
+    $('pps-body').scrollTop = 0;
+    if (name === 'home') renderSheets();
+  }
+  function openSection(){ $('passport-section').style.display = 'flex'; show('home'); }
+  function exitSection(){ $('passport-section').style.display = 'none'; }
+  window.openPassportSection = openSection;
+  $('pps-exit').addEventListener('click', exitSection);
+  $('pps-back').addEventListener('click', function(){
+    if (current === 'make') show('home'); else exitSection();
+  });
+  $('pps-new').addEventListener('click', function(){ show('make'); });
+
+  /* ---- relocate the maker panel into the section + step headers ---- */
+  var panel = $('panel-passport');
+  $('pps-make').appendChild(panel);
+  panel.classList.add('open');
+  panel.style.display = 'block';
+  function stepHeader(text, beforeEl){
+    var h = document.createElement('div');
+    h.className = 'pps-step';
+    h.textContent = text;
+    panel.insertBefore(h, beforeEl);
+    return h;
+  }
+  var labels = panel.querySelectorAll('label');
+  /* STEP 1 · PHOTO (the file label), STEP 2 · ADJUST (Background),
+     STEP 3 · SHEET (the Copies row) */
+  stepHeader('STEP 1 · PHOTO', labels[0]);
+  for (var i = 0; i < labels.length; i++) {
+    if (labels[i].textContent.trim() === 'Background') { stepHeader('STEP 2 · ADJUST — BACKGROUND & CROP', labels[i]); break; }
+  }
+  var copiesSel = $('pp-copies');
+  var row = copiesSel.closest('.row');
+  if (row) stepHeader('STEP 3 · SHEET — COPIES & PAPER', row);
+  var customIn = $('pp-copies-custom');
+  copiesSel.addEventListener('change', function(){
+    customIn.style.display = this.value === 'custom' ? 'block' : 'none';
+  });
+
+  /* ---- saved sheets ---- */
+  var viewRec = null, viewUrl = null;
+  function fmtDate(ms){
+    try { return new Date(ms).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }); }
+    catch(e){ return ''; }
+  }
+  function renderSheets(){
+    SheetStore.all().then(function(recs){
+      recs.sort(function(a, b){ return b.createdAt - a.createdAt; });
+      var list = $('pps-list');
+      list.innerHTML = '';
+      $('pps-empty').style.display = recs.length ? 'none' : 'block';
+      recs.forEach(function(rec){
+        var card = document.createElement('div');
+        card.className = 'sheetcard';
+        var url = URL.createObjectURL(rec.blob);
+        card.innerHTML = '<img src="' + url + '" alt=""><div><div class="sn"></div><div class="sm">'
+          + fmtDate(rec.createdAt) + ' · ' + rec.copies + ' copies</div></div>';
+        card.querySelector('.sn').textContent = rec.name;
+        card.addEventListener('click', function(){ viewSheet(rec); });
+        list.appendChild(card);
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+      });
+    });
+  }
+  function viewSheet(rec){
+    viewRec = rec;
+    if (viewUrl) URL.revokeObjectURL(viewUrl);
+    viewUrl = URL.createObjectURL(rec.blob);
+    $('pps-view-img').src = viewUrl;
+    $('pps-view').style.display = 'block';
+    $('pps-view').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  $('pps-view-dl').addEventListener('click', function(){
+    if (!viewRec) return;
+    window.__ltqrAutoOpenNext = true;
+    if (window.U && U.download) U.download(viewRec.blob, viewRec.name);
+  });
+  $('pps-view-del').addEventListener('click', function(){
+    if (!viewRec) return;
+    SheetStore.del(viewRec.id).then(function(){
+      viewRec = null;
+      $('pps-view').style.display = 'none';
+      renderSheets();
+    });
+  });
+
+  /* Save every finished sheet: the result box appears with the Ready
+     line; the sheet pixels live in #pp-sheet-preview — capture them. */
+  var lastSavedKey = '';
+  function captureSheet(){
+    var box = panel.querySelector('.resultbox');
+    if (!box || box.style.display === 'none') return;
+    var info = box.querySelector('.rinfo');
+    var prev = $('pp-sheet-preview');
+    if (!info || !prev || !prev.width) return;
+    var nameM = /Ready: ([^ ]+\.jpg)/.exec(info.textContent || '');
+    var name = nameM ? nameM[1] : 'passport-sheet.jpg';
+    var key = name + '|' + prev.width + 'x' + prev.height + '|' + info.textContent;
+    if (key === lastSavedKey) return;
+    lastSavedKey = key;
+    prev.toBlob(function(blob){
+      if (!blob) return;
+      var copies = copiesSel.value === 'custom'
+        ? Math.max(1, Math.min(60, parseInt(customIn.value, 10) || 8))
+        : parseInt(copiesSel.value, 10) || 8;
+      SheetStore.put({
+        id: 'sheet-' + Date.now() + '-' + Math.floor(Math.random() * 1e6),
+        name: name, copies: copies, createdAt: Date.now(), blob: blob
+      });
+    }, 'image/jpeg', 0.92);
+  }
+  new MutationObserver(function(){ setTimeout(captureSheet, 60); })
+    .observe(panel, { subtree: true, attributes: true, attributeFilter: ['style'], childList: true, characterData: true });
+
+  /* ---- entry points ---- */
+  var btn = document.querySelector('.toolbtn[data-tool="passport"]');
+  if (btn) btn.addEventListener('click', openSection);
+  if (/(#passport$|#passport&)/.test(location.hash || '')) openSection();
+})();
+</script>
+
+</body>
+</html>

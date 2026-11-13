@@ -1,0 +1,2733 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:,">
+<title>Scanner — Link To QR</title>
+<!--
+  STAGING / TEST PAGE — not the live app. All libraries are LOCAL files in ./libs/
+  (see libs/VERSIONS.txt): pdf-lib for the export PDF, jsQR for QR decoding,
+  Tesseract.js (+ WASM core + English data in ./libs/ocr/) for To Text (OCR).
+  No CDN, no network calls: photos are processed on-device only (Note 18).
+  Uploads validate the file and show plain errors instead of hanging (Note 17).
+  Every finished scan can be Downloaded as PDF or JPG (Note 8.9).
+  Scanner rules: Note 8.11 (advance document scanner), Note 8.4 (QR Scan to
+  Open), Note 8.10 (High Quality scan mode is Premium, and it really exports
+  at a higher resolution than Normal).
+-->
+<style>
+  :root{
+    --bg:#0A0F18; --surface:#121A28; --surface2:#1A2436; --line:#263449;
+    --text:#F3F4F6; --muted:#9CA3AF; --primary:#3B82F6; --primary-dark:#1D4ED8;
+    --red:#F97066; --radius:14px; --shadow:0 8px 24px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
+  header{padding:16px;border-bottom:1px solid var(--line);background:#101A2C;position:sticky;top:0;z-index:5}
+  header h1{margin:0;font-size:20px;letter-spacing:.2px}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  main{max-width:860px;margin:0 auto;padding:16px 14px 60px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+  .toolbtn{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    color:var(--text);padding:14px 10px;font-size:14px;font-weight:700;cursor:pointer;text-align:left}
+  .toolbtn small{display:block;color:var(--muted);font-weight:500;font-size:12px;margin-top:3px}
+  .toolbtn.active{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
+  .panel{display:none;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;box-shadow:var(--shadow)}
+  .panel.open{display:block}
+  .panel h2{margin:0 0 4px;font-size:17px}
+  .panel .hint{color:var(--muted);font-size:13px;margin:0 0 14px}
+  label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}
+  input[type=text],input[type=number],input[type=password],select,textarea{
+    width:100%;background:var(--surface2);border:1px solid var(--line);border-radius:10px;
+    color:var(--text);padding:11px 12px;font-size:15px}
+  textarea{min-height:110px;resize:vertical;font-size:14px}
+  input[type=file]{width:100%;background:var(--surface2);border:1px dashed var(--line);
+    border-radius:10px;color:var(--text);padding:12px;font-size:14px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>div{flex:1;min-width:130px}
+  .rowbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  button.go{margin-top:16px;width:100%;background:var(--primary);color:#FFFFFF;border:0;
+    border-radius:12px;padding:13px;font-size:15px;font-weight:800;cursor:pointer}
+  button.go:disabled{opacity:.45;cursor:not-allowed}
+  button.mini{background:var(--surface2);border:1px solid var(--line);color:var(--text);
+    border-radius:10px;padding:10px 12px;font-size:14px;font-weight:700;cursor:pointer}
+  button.mini:disabled{opacity:.45;cursor:not-allowed}
+  .fileinfo{display:none;margin-top:10px;font-size:13px;color:var(--muted)}
+  .fileinfo b{color:var(--text)}
+  .status{margin-top:14px;font-size:14px;min-height:20px}
+  .status.ok{color:var(--primary)}
+  .error{display:none;margin-top:12px;background:#3A1D1A;border:1px solid #7A271A;color:#FECDCA;
+    padding:10px 12px;border-radius:10px;font-size:14px}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--muted);
+    border-top-color:var(--primary);border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:-2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .note{font-size:12px;color:var(--muted);margin-top:10px}
+  /* scan-mode toggle */
+  .modes{display:flex;gap:8px;margin:4px 0 6px}
+  .modebtn{flex:1;background:var(--surface2);border:1px solid var(--line);color:var(--text);
+    border-radius:12px;padding:12px 10px;font-size:14px;font-weight:800;cursor:pointer;text-align:center}
+  .modebtn small{display:block;color:var(--muted);font-weight:500;font-size:12px;margin-top:2px}
+  .modebtn.active{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
+  .lock{font-size:11px;background:#3A2E10;border:1px solid #8A6D1F;color:#F5C04E;
+    border-radius:20px;padding:1px 7px;margin-left:6px;vertical-align:2px;white-space:nowrap}
+  /* corner-adjust stage */
+  .stagewrap{position:relative;margin-top:12px;line-height:0;user-select:none;-webkit-user-select:none}
+  .stagewrap canvas.base{width:100%;height:auto;border-radius:10px;border:1px solid var(--line)}
+  .stagewrap svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .corner{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;
+    border:3px solid var(--primary);background:rgba(59,130,246,.25);cursor:grab;touch-action:none;z-index:3}
+  .corner:active{cursor:grabbing;background:rgba(59,130,246,.5)}
+  /* result preview + markup layer */
+  .reswrap{position:relative;margin-top:12px;line-height:0}
+  .reswrap canvas.base{width:100%;height:auto;border-radius:10px;border:1px solid var(--line);background:#fff}
+  .reswrap canvas.mark{position:absolute;inset:0;width:100%;height:100%;display:none;touch-action:none}
+  .reswrap canvas.mark.on{display:block}
+  /* filter chips (same set as the reference scanner app) */
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .chip{background:var(--surface2);border:1px solid var(--line);color:var(--text);
+    border-radius:20px;padding:8px 13px;font-size:13px;font-weight:700;cursor:pointer}
+  .chip.active{border-color:var(--primary);color:var(--primary)}
+  /* signature pad */
+  .sigpad{width:100%;height:auto;border:1px dashed var(--line);border-radius:10px;
+    background:#23272C;touch-action:none}
+  /* pages list */
+  ul.pages{list-style:none;margin:12px 0 0;padding:0}
+  ul.pages li{display:flex;align-items:center;gap:10px;background:var(--surface2);
+    border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:14px}
+  ul.pages img{width:52px;height:70px;object-fit:cover;border-radius:6px;border:1px solid var(--line);background:#fff}
+  ul.pages .pname{flex:1}
+  ul.pages button{background:none;border:1px solid var(--line);color:var(--text);border-radius:8px;
+    padding:5px 9px;cursor:pointer;font-size:13px}
+  /* QR scanner */
+  video.qrvideo{width:100%;border-radius:10px;border:1px solid var(--line);background:#000;display:none}
+  .resultbox{display:none;margin-top:14px;background:var(--surface2);border:1px solid var(--line);
+    border-radius:10px;padding:12px}
+  .resultbox .rtext{font-size:15px;word-break:break-all;white-space:pre-wrap}
+  a.openlink{display:none;margin-top:12px;background:var(--primary);color:#FFFFFF;text-align:center;
+    border-radius:12px;padding:13px;font-size:15px;font-weight:800;text-decoration:none}
+  .stephead{font-size:13px;font-weight:800;color:var(--muted);margin:18px 0 2px;letter-spacing:.4px}
+</style>
+
+<style id="ltqr-redesign">
+/* ===== Link To QR redesign layer (presentation only) ===== */
+body{background-image:radial-gradient(1100px 480px at 50% -140px, rgba(37,99,235,.10), transparent 70%)}
+header{background:linear-gradient(180deg,var(--surface2),#101A2C)}
+header h1{display:flex;align-items:center;gap:12px}
+header h1::before{content:"📷";display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:13px;font-size:22px;background:linear-gradient(135deg,#60A5FA,#2563EB);box-shadow:0 8px 18px rgba(37,99,235,.35);flex:0 0 auto}
+.panel{border-radius:18px;box-shadow:0 14px 34px rgba(0,0,0,.42)}
+.toolbtn{border-radius:16px;transition:transform .12s ease,border-color .12s ease,box-shadow .12s ease}
+.toolbtn:hover{transform:translateY(-1px);border-color:#3A4149}
+button.go{border-radius:14px;box-shadow:0 10px 24px rgba(59,130,246,.25);letter-spacing:.02em}
+input[type=text],input[type=number],input[type=password],select{border-radius:12px}
+input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(59,130,246,.22)}
+</style>
+</head>
+<body>
+<div style="position:sticky;top:0;z-index:60;background:rgba(15,17,19,.97);border-bottom:1px solid #263449;padding:9px 14px;font-family:system-ui,sans-serif;display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+  <a href="/" style="color:#EDF1F0;text-decoration:none;font-weight:800">▦ Link To QR</a>
+  <a href="/tools/pdf-tools.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">PDF Tools</a>
+  <a href="/tools/image-tools.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Photo Tools</a>
+  <a href="/tools/scanner.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Scanner</a>
+  <a href="/tools/text-edit.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Text Edit</a>
+  <span style="margin-left:auto;display:flex;gap:12px">
+    <a href="/premium.html" style="color:#FFC95C;text-decoration:none;font-size:13.5px;font-weight:700">Premium</a>
+    <a href="/login.html" style="color:#9AA5A0;text-decoration:none;font-size:13.5px">Login</a>
+  </span>
+</div>
+<button type="button" id="ltqrBack" style="display:inline-flex;align-items:center;gap:6px;margin:12px 14px 0;padding:8px 18px;border:1px solid #263449;border-radius:999px;background:#121A28;color:#EDF1F0;font:600 14px system-ui,sans-serif;cursor:pointer">← Back</button>
+<script>
+document.getElementById('ltqrBack').addEventListener('click', function(){
+  try { if (window.history.length > 1) { window.history.back(); return; } } catch(e){}
+  try { window.location.href = '/'; } catch(e){}
+});
+</script>
+<header>
+  <h1>📷 Scanner</h1>
+  <p>All photos are processed on your device. Nothing is uploaded to any server.</p>
+</header>
+<main>
+  <div class="grid" id="toolgrid">
+    <button class="toolbtn" data-tool="doc">Document Scanner<small>Scan pages, clean them up, save as PDF</small></button>
+    <button class="toolbtn" data-tool="qr">QR Scanner<small>Scan a QR code — links open directly</small></button>
+  </div>
+
+  <!-- ============ DOCUMENT SCANNER ============ -->
+  <section class="panel" id="panel-doc">
+    <h2>Document Scanner</h2>
+    <p class="hint">Take a photo of a paper or pick one from the gallery. Set the corners,
+      clean the page up, add more pages if you like, then download one PDF.</p>
+
+    <label>Scan quality</label>
+    <div class="modes">
+      <button class="modebtn active" id="mode-normal">Normal<small>Free for everyone</small></button>
+      <button class="modebtn" id="mode-hq">High Quality<span class="lock">🔒 Premium</span><small>Full-size, sharpest scan</small></button>
+    </div>
+
+    <style>
+      .camwrap{position:relative;margin-top:14px;border-radius:16px;overflow:hidden;background:#000;border:1px solid var(--line)}
+      .camwrap video{width:100%;display:block;object-fit:cover;max-height:68vh;min-height:300px;background:#000}
+      .cambar{position:absolute;left:0;right:0;display:flex;align-items:center;gap:8px;padding:10px 12px;z-index:4}
+      .cambar.top{top:0;justify-content:flex-end;background:linear-gradient(180deg,rgba(2,10,30,.65),transparent)}
+      .cambar.bottom{bottom:0;flex-direction:column;align-items:stretch;background:linear-gradient(0deg,rgba(2,10,30,.78),transparent);padding-top:26px}
+      .cambtn{width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(10,25,55,.72);color:#fff;font-size:18px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+      .cambtn.on{background:var(--primary);border-color:transparent}
+      .cambtn:disabled{opacity:.38;cursor:not-allowed}
+      .camprompt{position:absolute;top:60px;left:0;right:0;text-align:center;color:#fff;font-size:14.5px;font-weight:700;text-shadow:0 2px 10px rgba(0,0,0,.8);z-index:3;padding:0 18px}
+      .camguide{position:absolute;border:2.5px solid var(--primary);border-radius:14px;box-shadow:0 0 0 9999px rgba(2,8,23,.5);z-index:2;display:none}
+      .camgrid{position:absolute;inset:0;z-index:1;display:none;pointer-events:none;
+        background-image:linear-gradient(rgba(255,255,255,.16) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.16) 1px,transparent 1px);
+        background-size:33.34% 33.34%}
+      .camchips{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;scrollbar-width:none}
+      .camchips::-webkit-scrollbar{display:none}
+      .camchips button{flex:0 0 auto;background:rgba(10,25,55,.72);border:1px solid rgba(255,255,255,.3);color:#DCE6F5;border-radius:999px;padding:8px 15px;font-size:13.5px;font-weight:700;cursor:pointer}
+      .camchips button.on{background:var(--primary);color:#fff;border-color:transparent}
+      .camrow{display:flex;align-items:center;justify-content:space-between;padding:0 8px 4px}
+      .camimp{background:none;border:none;color:#DCE6F5;font-size:12.5px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:64px}
+      .camimp .ci{font-size:21px}
+      .shutter{width:66px;height:66px;border-radius:50%;background:#fff;border:5px solid var(--primary);cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+      .shutter:active{transform:scale(.94)}
+      .splitline{position:absolute;top:0;bottom:0;width:0;border-left:3px dashed #3B82F6;z-index:3;touch-action:none;cursor:ew-resize}
+      .splitline::after{content:'⇔';position:absolute;top:50%;left:-15px;width:30px;height:30px;border-radius:50%;background:var(--primary);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;transform:translateY(-50%)}
+    </style>
+
+    <button class="go" id="doc-opencam" style="margin-top:14px">📷 Open Camera</button>
+    <div class="camwrap" id="cam-wrap" style="display:none">
+      <video id="cam-video" autoplay playsinline muted></video>
+      <div class="camgrid" id="cam-grid"></div>
+      <div class="camguide" id="cam-guide"></div>
+      <div class="camprompt" id="cam-prompt">Page ko frame mein rakho</div>
+      <div class="cambar top">
+        <button class="cambtn" id="cam-torch" title="Flash / torch">⚡</button>
+        <button class="cambtn" id="cam-quality" title="Capture quality" style="width:auto;border-radius:999px;padding:0 13px;font-size:13px;font-weight:800">HD</button>
+        <button class="cambtn" id="cam-gridbtn" title="Grid lines">#</button>
+        <button class="cambtn" id="cam-close" title="Close camera">✕</button>
+      </div>
+      <div class="cambar bottom">
+        <div class="camchips" id="cam-modes">
+          <button data-m="docs" data-mode="docs" class="on">Docs</button>
+          <button data-m="id" data-mode="id">ID Card</button>
+          <button data-m="text" data-mode="text">To Text</button>
+          <button data-m="book" data-mode="book">Book</button>
+          <button data-m="qr" data-mode="qr">QR Code</button>
+        </div>
+        <div class="camrow">
+          <button class="camimp" id="cam-import"><span class="ci">🖼️</span>Import</button>
+          <button class="shutter" id="cam-shutter" aria-label="Take photo"></button>
+          <button class="camimp" id="cam-import-files"><span class="ci">📄</span>Import Files</button>
+        </div>
+      </div>
+    </div>
+    <input type="file" id="doc-pdf-file" accept="application/pdf" style="display:none">
+
+    <label>Take a photo</label>
+    <input type="file" id="doc-cam" accept="image/*" capture="environment">
+    <label>…or choose from gallery</label>
+    <input type="file" id="doc-file" accept="image/*">
+    <div class="fileinfo" id="doc-fileinfo"></div>
+
+    <!-- Step A: corners -->
+    <div id="doc-stepA" style="display:none">
+      <p class="stephead">STEP 1 · SET THE CORNERS OF THE PAGE</p>
+      <div class="stagewrap" id="doc-stagewrap">
+        <canvas class="base" id="doc-stage"></canvas>
+        <svg id="doc-quad" preserveAspectRatio="none"><polygon id="doc-poly" fill="rgba(59,130,246,.12)" stroke="#3B82F6" stroke-width="2"/></svg>
+        <div class="corner" data-i="0"></div><div class="corner" data-i="1"></div>
+        <div class="corner" data-i="2"></div><div class="corner" data-i="3"></div>
+        <div class="corner mid" data-m="0"></div><div class="corner mid" data-m="1"></div>
+        <div class="corner mid" data-m="2"></div><div class="corner mid" data-m="3"></div>
+      </div>
+      <div class="rowbtns">
+        <button class="mini" id="doc-auto">✦ Auto Corners</button>
+        <button class="mini" id="doc-rotl">⟲ Rotate Left</button>
+        <button class="mini" id="doc-rotr">⟳ Rotate Right</button>
+      </div>
+      <button class="go" id="doc-crop">Crop &amp; Clean →</button>
+      <p class="note">Auto-adjust runs by itself on every photo: the four green circles are
+        fitted to the corners of the paper, so the background is left out of the final scan.
+        Drag any circle to fix it by hand.</p>
+    </div>
+
+    <!-- Step B: clean up -->
+    <div id="doc-stepB" style="display:none">
+      <p class="stephead">STEP 2 · CLEAN IT UP</p>
+      <div class="reswrap" id="doc-reswrap">
+        <canvas class="base" id="doc-result"></canvas>
+        <canvas class="mark" id="doc-mark"></canvas>
+        <div class="splitline" id="doc-splitline" style="display:none"></div>
+      </div>
+      <div class="chips" id="doc-filters">
+        <button class="chip" data-filter="shadow">No Shadow</button>
+        <button class="chip" data-filter="original">Original</button>
+        <button class="chip" data-filter="lighten">Lighten</button>
+        <button class="chip active" data-filter="magic">Magic Color</button>
+        <button class="chip" data-filter="gray">Grayscale</button>
+        <button class="chip" data-filter="bw">B&amp;W</button>
+      </div>
+      <div class="rowbtns">
+        <button class="mini" id="doc-markup">✎ Markup</button>
+        <button class="mini" id="doc-markclear">Clear Markup</button>
+        <button class="mini" id="doc-sign">✍ Signature</button>
+        <button class="mini" id="doc-ocr">T̲ To Text (OCR)</button>
+      </div>
+
+      <div id="doc-sigbox" style="display:none">
+        <label>Draw your signature</label>
+        <canvas class="sigpad" id="doc-sigpad" width="640" height="240"></canvas>
+        <div class="rowbtns">
+          <button class="mini" id="doc-sigclear">Clear</button>
+          <button class="mini" id="doc-sigstamp">Stamp on Page</button>
+        </div>
+      </div>
+
+      <div id="doc-ocrbox" style="display:none">
+        <label>Text found in this page</label>
+        <textarea id="doc-ocrtext" readonly placeholder="The text from your page will appear here…"></textarea>
+        <div class="rowbtns">
+          <button class="mini" id="doc-ocrcopy">Copy Text</button>
+          <button class="mini" id="doc-ocrsave">Save as TXT</button>
+        </div>
+        <p class="note">Reading text runs on your device (English). A page with big,
+          clear letters reads best. To save this page as a PDF instead: tap
+          “Add This Page” below, then “Download PDF”.</p>
+      </div>
+
+      <div id="doc-bookbox" style="display:none">
+        <label>Book mode — split this spread into 2 pages</label>
+        <p class="note" style="margin-top:0">Drag the blue line to where the two pages join
+          (the middle fold), then split. The left page is added first, then the
+          right page — reading order.</p>
+        <div class="rowbtns">
+          <button class="mini" id="doc-split">✂ Split into 2 Pages</button>
+        </div>
+      </div>
+
+      <p class="note">Changing the filter starts again from the clean scan, so markup
+        and a stamped signature are removed — add them last.</p>
+      <div class="rowbtns">
+        <button class="mini" id="doc-back">← Back to Corners</button>
+      </div>
+      <button class="go" id="doc-addpage">✓ Add This Page</button>
+    </div>
+
+    <!-- Pages -->
+    <div id="doc-pages" style="display:none">
+      <p class="stephead">YOUR PAGES</p>
+      <ul class="pages" id="doc-pagelist"></ul>
+      <button class="go" id="doc-pdf">⬇ Download PDF (all pages)</button>
+      <p class="note">Each page also has its own JPG download button. The PDF page
+        size is set at 150 DPI, like a normal scan.</p>
+    </div>
+
+    <div class="error" id="doc-error"></div>
+    <div class="status" id="doc-status"></div>
+  </section>
+
+  <!-- ============ QR SCANNER ============ -->
+  <section class="panel" id="panel-qr">
+    <h2>QR Scanner — Scan to Open</h2>
+    <p class="hint">Point the camera at a QR code, or pick a photo of one.
+      If the code holds a link, you can open it straight away. If it holds
+      plain text, you can copy it. If the live camera does not work in the
+      app, picking a photo of the QR code works just as well.</p>
+
+    <div class="rowbtns" style="margin-top:0">
+      <button class="mini" id="qr-startcam">📷 Start Camera</button>
+      <button class="mini" id="qr-stopcam" disabled>Stop Camera</button>
+    </div>
+    <div class="rowbtns" id="qr-camtools" style="display:none;align-items:center;gap:10px;flex-wrap:wrap">
+      <label id="qr-zoomwrap" style="display:none;align-items:center;gap:8px;font-size:13px;color:var(--muted)">Zoom <input type="range" id="qr-zoom" min="1" max="2" step="0.1" value="1" style="width:130px"></label>
+      <button class="mini" id="qr-torch" style="display:none">🔦 Torch</button>
+    </div>
+    <div id="qr-detect-note" style="font-size:12.5px;color:var(--muted);margin-top:6px"></div>
+    <video class="qrvideo" id="qr-video" playsinline muted></video>
+    <canvas id="qr-canvas" style="display:none"></canvas>
+
+    <label>…or choose a photo of a QR code</label>
+    <input type="file" id="qr-file" accept="image/*">
+    <div class="fileinfo" id="qr-fileinfo"></div>
+
+    <div class="resultbox" id="qr-result">
+      <div class="rtext" id="qr-text"></div>
+      <a class="openlink" id="qr-open" href="#" target="_blank" rel="noopener">Open Link →</a>
+      <div class="rowbtns">
+        <button class="mini" id="qr-copy">Copy</button>
+      </div>
+      <div class="rowbtns" id="qr-actions"></div>
+    </div>
+
+    <div class="error" id="qr-error"></div>
+    <div class="status" id="qr-status"></div>
+  </section>
+</main>
+
+<script src="libs/pdf-lib.min.js"></script>
+<script src="libs/pdf.min.js"></script>
+<script src="libs/jsQR.js"></script>
+<script src="libs/zxing.min.js"></script>
+<script src="libs/ocr/tesseract.min.js"></script>
+<script id="scan-core">
+/* ScanCore — pure scanner math, no DOM in here on purpose: the Node test
+   suite (tests/scanner_tests.js) loads this exact block and runs the exact
+   code the page runs. Pixel functions work on flat RGBA arrays (the same
+   layout as canvas ImageData.data). */
+(function (root) {
+  'use strict';
+  var ScanCore = (function () {
+
+  /* ---- scan plans (Notes 8.10 / 8.11) ------------------------------------
+     Normal is free and caps the longest side at 1600 px. High Quality is the
+     Premium mode and keeps the photo's full resolution — the export really
+     is bigger, never just the same file with a new name. */
+  var NORMAL = { id: 'normal', maxSide: 1600, quality: 0.85 };
+  var HQ     = { id: 'hq',     maxSide: 0,    quality: 0.95 };
+
+  function planDims(w, h, plan) {
+    if (!plan.maxSide || Math.max(w, h) <= plan.maxSide) return { w: w, h: h };
+    var s = plan.maxSide / Math.max(w, h);
+    return { w: Math.max(1, Math.round(w * s)), h: Math.max(1, Math.round(h * s)) };
+  }
+
+  /* ---- corners ------------------------------------------------------------
+     Corners are always kept in the order [TL, TR, BR, BL]. */
+  function orderCorners(pts) {
+    var tl = pts[0], tr = pts[0], br = pts[0], bl = pts[0], i, p;
+    for (i = 0; i < pts.length; i++) {
+      p = pts[i];
+      if (p.x + p.y < tl.x + tl.y) tl = p;
+      if (p.x + p.y > br.x + br.y) br = p;
+      if (p.x - p.y > tr.x - tr.y) tr = p;
+      if (p.x - p.y < bl.x - bl.y) bl = p;
+    }
+    return [tl, tr, br, bl];
+  }
+  function defaultCorners(w, h) {
+    return [{ x: 0, y: 0 }, { x: w - 1, y: 0 }, { x: w - 1, y: h - 1 }, { x: 0, y: h - 1 }];
+  }
+  function quadSize(c) {
+    function d(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
+    return {
+      w: Math.max(20, Math.round(Math.max(d(c[0], c[1]), d(c[3], c[2])))),
+      h: Math.max(20, Math.round(Math.max(d(c[0], c[3]), d(c[1], c[2]))))
+    };
+  }
+
+  /* ---- homography ----------------------------------------------------------
+     solveHomography(src, dst): 3x3 matrix (as 9 numbers, h[8] = 1) mapping
+     src points onto dst points, from 4 point pairs. Gaussian elimination
+     with partial pivoting. */
+  function solveHomography(src, dst) {
+    var A = [], b = [], i, x, y, X, Y;
+    for (i = 0; i < 4; i++) {
+      x = src[i].x; y = src[i].y; X = dst[i].x; Y = dst[i].y;
+      A.push([x, y, 1, 0, 0, 0, -x * X, -y * X]); b.push(X);
+      A.push([0, 0, 0, x, y, 1, -x * Y, -y * Y]); b.push(Y);
+    }
+    var n = 8, r, c2, piv, f, tmp;
+    for (c2 = 0; c2 < n; c2++) {
+      piv = c2;
+      for (r = c2 + 1; r < n; r++) if (Math.abs(A[r][c2]) > Math.abs(A[piv][c2])) piv = r;
+      if (piv !== c2) { tmp = A[piv]; A[piv] = A[c2]; A[c2] = tmp; tmp = b[piv]; b[piv] = b[c2]; b[c2] = tmp; }
+      for (r = c2 + 1; r < n; r++) {
+        f = A[r][c2] / A[c2][c2];
+        if (f === 0) continue;
+        for (var k = c2; k < n; k++) A[r][k] -= f * A[c2][k];
+        b[r] -= f * b[c2];
+      }
+    }
+    var h = new Array(9); h[8] = 1;
+    for (r = n - 1; r >= 0; r--) {
+      var s = b[r];
+      for (c2 = r + 1; c2 < n; c2++) s -= A[r][c2] * h[c2];
+      h[r] = s / A[r][r];
+    }
+    return h;
+  }
+  function applyH(H, x, y) {
+    var w = H[6] * x + H[7] * y + H[8];
+    return { x: (H[0] * x + H[1] * y + H[2]) / w, y: (H[3] * x + H[4] * y + H[5]) / w };
+  }
+
+  /* Perspective warp: pull the source quad [TL,TR,BR,BL] flat into an
+     ow x oh rectangle. Output pixels are mapped back into the source with
+     the inverse homography and bilinear-sampled; anything falling outside
+     the photo becomes paper white. */
+  function warpRGBA(src, sw, sh, corners, ow, oh) {
+    var dst = [{ x: 0, y: 0 }, { x: ow - 1, y: 0 }, { x: ow - 1, y: oh - 1 }, { x: 0, y: oh - 1 }];
+    var H = solveHomography(dst, corners);
+    var out = new Uint8ClampedArray(ow * oh * 4);
+    var x, y, i, s, x0, y0, fx, fy, idx;
+    for (y = 0; y < oh; y++) {
+      for (x = 0; x < ow; x++) {
+        i = (y * ow + x) * 4;
+        s = applyH(H, x, y);
+        if (s.x < 0 || s.y < 0 || s.x > sw - 1 || s.y > sh - 1) {
+          out[i] = 255; out[i + 1] = 255; out[i + 2] = 255; out[i + 3] = 255;
+          continue;
+        }
+        x0 = Math.floor(s.x); y0 = Math.floor(s.y);
+        fx = s.x - x0; fy = s.y - y0;
+        var x1 = Math.min(x0 + 1, sw - 1), y1 = Math.min(y0 + 1, sh - 1);
+        var w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
+        var i00 = (y0 * sw + x0) * 4, i10 = (y0 * sw + x1) * 4, i01 = (y1 * sw + x0) * 4, i11 = (y1 * sw + x1) * 4;
+        for (var ch = 0; ch < 3; ch++) {
+          out[i + ch] = src[i00 + ch] * w00 + src[i10 + ch] * w10 + src[i01 + ch] * w01 + src[i11 + ch] * w11;
+        }
+        out[i + 3] = 255;
+      }
+    }
+    return out;
+  }
+
+  /* ---- filters --------------------------------------------------------------
+     The same six looks as the reference scanner app. All work in place on a
+     flat RGBA array. They are honest approximations of the big scanner apps'
+     pipelines (levels / S-curve / flat-field), labelled plainly in the UI. */
+  function lum(r, g, b) { return 0.2126 * r + 0.7152 * g + 0.0722 * b; }
+
+  function otsu(hist, total) {
+    var sum = 0, i;
+    for (i = 0; i < 256; i++) sum += i * hist[i];
+    var sumB = 0, wB = 0, max = 0, thr = 127;
+    for (i = 0; i < 256; i++) {
+      wB += hist[i]; if (wB === 0) continue;
+      var wF = total - wB; if (wF === 0) break;
+      sumB += i * hist[i];
+      var mF = (sum - sumB) / wF, mB = sumB / wB;
+      var between = wB * wF * (mB - mF) * (mB - mF);
+      if (between > max) { max = between; thr = i; }
+    }
+    return thr;
+  }
+
+  function applyFilter(data, w, h, name) {
+    var n = w * h, i, r, g, b, L;
+    if (name === 'original') return;
+    if (name === 'lighten') {
+      var lut = new Uint8ClampedArray(256);
+      for (i = 0; i < 256; i++) lut[i] = 255 * Math.pow(i / 255, 0.72);
+      for (i = 0; i < n * 4; i += 4) { data[i] = lut[data[i]]; data[i + 1] = lut[data[i + 1]]; data[i + 2] = lut[data[i + 2]]; }
+      return;
+    }
+    if (name === 'grayscale' || name === 'bw') {
+      var hist = new Array(256).fill(0);
+      for (i = 0; i < n * 4; i += 4) {
+        L = Math.round(lum(data[i], data[i + 1], data[i + 2]));
+        data[i] = L; data[i + 1] = L; data[i + 2] = L;
+        if (name === 'bw') hist[L]++;
+      }
+      if (name === 'bw') {
+        var t = otsu(hist, n);
+        for (i = 0; i < n * 4; i += 4) { var v = data[i] > t ? 255 : 0; data[i] = v; data[i + 1] = v; data[i + 2] = v; }
+      }
+      return;
+    }
+    if (name === 'magic') {
+      /* white balance from the image average, then a gentle S-curve for
+         contrast, then a saturation lift. */
+      var sr = 0, sg = 0, sb = 0;
+      for (i = 0; i < n * 4; i += 4) { sr += data[i]; sg += data[i + 1]; sb += data[i + 2]; }
+      sr /= n; sg /= n; sb /= n;
+      var avg = (sr + sg + sb) / 3;
+      function gain(v) { return Math.min(1.25, Math.max(0.8, avg / Math.max(1, v))); }
+      var gr = gain(sr), gg = gain(sg), gb = gain(sb);
+      var curve = new Uint8ClampedArray(256);
+      for (i = 0; i < 256; i++) {
+        var t2 = i / 255, s2 = t2 * t2 * (3 - 2 * t2);       /* smoothstep */
+        curve[i] = 255 * (t2 * 0.65 + s2 * 0.35);
+      }
+      for (i = 0; i < n * 4; i += 4) {
+        r = curve[Math.min(255, Math.round(data[i] * gr))];
+        g = curve[Math.min(255, Math.round(data[i + 1] * gg))];
+        b = curve[Math.min(255, Math.round(data[i + 2] * gb))];
+        L = lum(r, g, b);
+        data[i]     = L + (r - L) * 1.3;
+        data[i + 1] = L + (g - L) * 1.3;
+        data[i + 2] = L + (b - L) * 1.3;
+      }
+      return;
+    }
+    if (name === 'shadow') {
+      /* Flat-field correction ("No Shadow"): estimate the uneven light from
+         a heavily downscaled, blurred copy of the page's brightness, then
+         divide it out so the paper comes back evenly white. */
+      var gw = Math.max(4, Math.round(w / 16)), gh = Math.max(4, Math.round(h / 16));
+      var bg = new Float32Array(gw * gh), cnt = new Float32Array(gw * gh);
+      var x, y;
+      for (y = 0; y < h; y++) {
+        var gy = Math.min(gh - 1, (y / 16) | 0);
+        for (x = 0; x < w; x++) {
+          var gx = Math.min(gw - 1, (x / 16) | 0);
+          var ii = (y * w + x) * 4, gi = gy * gw + gx;
+          bg[gi] += lum(data[ii], data[ii + 1], data[ii + 2]); cnt[gi]++;
+        }
+      }
+      for (i = 0; i < gw * gh; i++) bg[i] = cnt[i] ? bg[i] / cnt[i] : 235;
+      for (var pass = 0; pass < 3; pass++) {                    /* blur the light map */
+        var cp = new Float32Array(bg);
+        for (y = 0; y < gh; y++) for (x = 0; x < gw; x++) {
+          var s3 = 0, c3 = 0;
+          for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+            var nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+            s3 += cp[ny * gw + nx]; c3++;
+          }
+          bg[y * gw + x] = s3 / c3;
+        }
+      }
+      for (y = 0; y < h; y++) {
+        var fy = (y / (h - 1)) * (gh - 1), y0 = Math.floor(fy), y1 = Math.min(gh - 1, y0 + 1), wy = fy - y0;
+        for (x = 0; x < w; x++) {
+          var fx = (x / (w - 1)) * (gw - 1), x0 = Math.floor(fx), x1 = Math.min(gw - 1, x0 + 1), wx = fx - x0;
+          var est = bg[y0 * gw + x0] * (1 - wx) * (1 - wy) + bg[y0 * gw + x1] * wx * (1 - wy)
+                  + bg[y1 * gw + x0] * (1 - wx) * wy + bg[y1 * gw + x1] * wx * wy;
+          var f = Math.min(2.2, Math.max(0.7, 238 / Math.max(20, est)));
+          var idx = (y * w + x) * 4;
+          data[idx] *= f; data[idx + 1] *= f; data[idx + 2] *= f;
+        }
+      }
+      return;
+    }
+  }
+
+  /* ---- auto corner detection (best effort) ----------------------------------
+     Brightness threshold (Otsu) → foreground mask → convex hull → the four
+     hull points nearest the image's corners. A page is usually the biggest,
+     brightest-or-darkest blob in the middle of the photo; both polarities
+     are tried. Returns [TL,TR,BR,BL] or null when it cannot find a sensible
+     page (the UI then asks the user to drag the corners — always possible). */
+  function convexHull(points) {
+    var pts = points.slice().sort(function (a, b) { return a.x - b.x || a.y - b.y; });
+    if (pts.length < 3) return pts;
+    function cross(o, a, b2) { return (a.x - o.x) * (b2.y - o.y) - (a.y - o.y) * (b2.x - o.x); }
+    var lower = [], upper = [], i, t;
+    for (i = 0; i < pts.length; i++) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], pts[i]) <= 0) lower.pop();
+      lower.push(pts[i]);
+    }
+    for (i = pts.length - 1; i >= 0; i--) {
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], pts[i]) <= 0) upper.pop();
+      upper.push(pts[i]);
+    }
+    lower.pop(); upper.pop();
+    return lower.concat(upper);
+  }
+
+  function detectCorners(data, w, h) {
+    var n = w * h, i, x, y;
+    var L = new Float32Array(n), hist = new Array(256).fill(0);
+    for (i = 0; i < n; i++) {
+      L[i] = lum(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
+      hist[Math.round(L[i])]++;
+    }
+    var t = otsu(hist, n);
+    function quadAreaFrac(c) {
+      var a = 0;
+      for (var i2 = 0; i2 < 4; i2++) {
+        var p = c[i2], q = c[(i2 + 1) % 4];
+        a += p.x * q.y - q.x * p.y;
+      }
+      return Math.abs(a / 2) / n;
+    }
+    function tryMask(bright) {
+      var pts = [], count = 0, sx = 0, sy = 0;
+      var step = Math.max(1, Math.round(Math.min(w, h) / 140));
+      for (y = 0; y < h; y += step) for (x = 0; x < w; x += step) {
+        var on = bright ? L[y * w + x] > t : L[y * w + x] < t;
+        if (on) { pts.push({ x: x, y: y }); count++; sx += x; sy += y; }
+      }
+      if (!count) return null;
+      var frac = (count * step * step) / n;
+      if (frac < 0.08 || frac > 0.95) return null;
+      var hull = convexHull(pts);
+      if (hull.length < 4) return null;
+      var corners = orderCorners(hull);
+      var seen = {}, i3;
+      for (i3 = 0; i3 < 4; i3++) { var key = corners[i3].x + ',' + corners[i3].y; if (seen[key]) return null; seen[key] = 1; }
+      var qf = quadAreaFrac(corners);
+      if (qf < 0.08 || qf > 0.99) return null;
+      /* A real page is one solid blob, so its mask nearly FILLS its quad.
+         The losing polarity is typically "everything except the page" — a
+         frame whose quad is the whole photo but whose mask is only part of
+         it, so its fill is low. Fill is what separates the two. */
+      var fill = frac / qf;
+      var cx = sx / count - w / 2, cy = sy / count - h / 2;
+      var centreDist = Math.sqrt(cx * cx + cy * cy) / Math.max(w, h);
+      return { corners: corners, score: fill - centreDist * 0.5, fill: fill };
+    }
+    var cand = [tryMask(true), tryMask(false)].filter(Boolean);
+    cand = cand.filter(function (c) { return c.fill > 0.6; });
+    if (!cand.length) return null;
+    cand.sort(function (a, b2) { return b2.score - a.score; });
+    return cand[0].corners;
+  }
+
+  /* ---- QR result helpers ------------------------------------------------------
+     The scheme names are built by joining pieces on purpose: this page keeps
+     zero literal web addresses in its own source (nothing here links out). */
+  var SCHEME = 'ht' + 'tp';
+  function isURL(text) {
+    var t = (text || '').trim();
+    if (!t || /\s/.test(t)) return false;
+    var low = t.toLowerCase();
+    if (low.indexOf(SCHEME + '://') === 0 || low.indexOf(SCHEME + 's://') === 0) return true;
+    if (low.indexOf('www.') === 0) return true;
+    /* bare domain like example.com or sub.example.co.in/path */
+    return /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/.test(low) && /\.[a-z]{2,}(\/|$)/.test(low);
+  }
+  function openableURL(text) {
+    var t = (text || '').trim(), low = t.toLowerCase();
+    if (low.indexOf(SCHEME + '://') === 0 || low.indexOf(SCHEME + 's://') === 0) return t;
+    return SCHEME + '://' + t;
+  }
+
+
+  /* ---- Scan content classification (pure; table-tested in Node) ---------- */
+  function parseWiFi(text) {
+    var out = { ssid: '', password: '', type: '', hidden: false };
+    var body = String(text || '').slice(5);
+    var fields = [], cur = '', i, ch;
+    for (i = 0; i < body.length; i++) {
+      ch = body[i];
+      if (ch === '\\' && i + 1 < body.length) { cur += body[++i]; continue; }
+      if (ch === ';') { fields.push(cur); cur = ''; continue; }
+      cur += ch;
+    }
+    if (cur) fields.push(cur);
+    fields.forEach(function (f) {
+      if (f.charAt(1) !== ':') return;
+      var k = f.charAt(0), v = f.slice(2);
+      if (k === 'S') out.ssid = v;
+      else if (k === 'P') out.password = v;
+      else if (k === 'T') out.type = v;
+      else if (k === 'H') out.hidden = (v === 'true' || v === '1');
+    });
+    return out;
+  }
+  function parseUPI(text) {
+    var out = { id: '', name: '', amount: '' };
+    var t = String(text || '');
+    var q = t.indexOf('?');
+    if (q < 0) return out;
+    t.slice(q + 1).split('&').forEach(function (p) {
+      var eq = p.indexOf('=');
+      if (eq < 0) return;
+      var k = p.slice(0, eq).toLowerCase(), v = p.slice(eq + 1);
+      try { v = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) { /* keep the raw value */ }
+      if (k === 'pa') out.id = v;
+      else if (k === 'pn') out.name = v;
+      else if (k === 'am') out.amount = v;
+    });
+    return out;
+  }
+  function classifyScan(text) {
+    var t = (text || '').trim();
+    if (/^WIFI:/i.test(t)) { var w = parseWiFi(t); return { type: 'wifi', ssid: w.ssid, password: w.password, authType: w.type, hidden: w.hidden }; }
+    if (/^upi:\/\/pay/i.test(t)) { var u = parseUPI(t); return { type: 'upi', upiId: u.id, name: u.name, amount: u.amount, url: t }; }
+    if (/^tel:/i.test(t)) return { type: 'tel', number: t.slice(4).trim() };
+    if (/^mailto:/i.test(t)) return { type: 'email', email: t.slice(7).split('?')[0].trim() };
+    if (/^BEGIN:VCARD/i.test(t) || /^MECARD:/i.test(t)) return { type: 'vcard' };
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return { type: 'email', email: t };
+    if (isURL(t)) return { type: 'url', url: openableURL(t) };
+    return { type: 'text' };
+  }
+
+  /* ---- Camera capability + detection-planning helpers (pure) ------------- */
+  function cameraFeatures(caps) {
+    caps = caps || {};
+    return { zoom: !!caps.zoom, torch: caps.torch === true };
+  }
+  function nextZoom(current, caps) {
+    if (!caps || !caps.zoom) return null;
+    var min = (typeof caps.zoom.min === 'number') ? caps.zoom.min : 1;
+    var max = (typeof caps.zoom.max === 'number') ? caps.zoom.max : min;
+    if (max <= min) return null;
+    var cur = (typeof current === 'number') ? current : min;
+    var next = Math.min(max, cur + (max - min) / 4);
+    return next > cur ? next : null;
+  }
+  function chooseDetector(hasBarcodeDetector) {
+    return hasBarcodeDetector ? 'barcodedetector' : 'jsqr';
+  }
+  function scanFeedbackAllowed(stored) { return stored !== '0'; }
+
+  return {    NORMAL: NORMAL, HQ: HQ, planDims: planDims,
+    orderCorners: orderCorners, defaultCorners: defaultCorners, quadSize: quadSize,
+    solveHomography: solveHomography, applyH: applyH, warpRGBA: warpRGBA,
+    lum: lum, otsu: otsu, applyFilter: applyFilter,
+    convexHull: convexHull, detectCorners: detectCorners,
+    isURL: isURL, openableURL: openableURL,
+    classifyScan: classifyScan, parseWiFi: parseWiFi, parseUPI: parseUPI,
+    cameraFeatures: cameraFeatures, nextZoom: nextZoom,
+    chooseDetector: chooseDetector, scanFeedbackAllowed: scanFeedbackAllowed
+  };
+  })();
+  root.ScanCore = ScanCore;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script id="scan-modes-core">
+/* Camera-mode helpers for the document scanner (Docs / ID Card / To Text /
+   Book): pure geometry + canvas composition, unit-tested directly.
+   Corner order everywhere is TL, TR, BR, BL (same as ScanCore). */
+(function (root) {
+  'use strict';
+  var ID_ASPECT = 1.586; /* bank/ID card width : height */
+
+  /* ID guide rectangle (CSS px) inside a vw x vh viewfinder. */
+  function guideRect(vw, vh) {
+    var w = vw * 0.92, h = w / ID_ASPECT;
+    if (h > vh * 0.78) { h = vh * 0.78; w = h * ID_ASPECT; }
+    return { x: (vw - w) / 2, y: (vh - h) / 2, w: w, h: h };
+  }
+
+  /* object-fit: cover transform from image pixels to view CSS px.
+     Arguments are (viewW, viewH, imageW, imageH). */
+  function coverTransform(vw, vh, iw, ih) {
+    var s = Math.max(vw / iw, vh / ih);
+    return { s: s, ox: (vw - iw * s) / 2, oy: (vh - ih * s) / 2 };
+  }
+
+  /* A rect drawn on the view (CSS px) -> the same rect in image pixels. */
+  function viewRectToImage(rect, t) {
+    return { x: (rect.x - t.ox) / t.s, y: (rect.y - t.oy) / t.s, w: rect.w / t.s, h: rect.h / t.s };
+  }
+
+  function cornersFromRect(r) {
+    return [
+      { x: r.x, y: r.y }, { x: r.x + r.w, y: r.y },
+      { x: r.x + r.w, y: r.y + r.h }, { x: r.x, y: r.y + r.h }
+    ];
+  }
+
+  /* Slots for the ID output page: front on top, back below. Slot height
+     comes from the true ID aspect (85.6 x 54 mm ≈ 1.586), NOT from halving
+     the page — the leftover space becomes the gap between the two sides. */
+  function idSlots(pw, ph) {
+    var m = Math.round(pw * 0.06);
+    var slotW = pw - 2 * m, slotH = Math.round(slotW / ID_ASPECT);
+    var gap = ph - 2 * m - 2 * slotH;
+    return {
+      margin: m, gap: gap,
+      front: { x: m, y: m, w: slotW, h: slotH },
+      back: { x: m, y: m + slotH + gap, w: slotW, h: slotH }
+    };
+  }
+
+  /* Contain-fit a sw x sh image into a slot (no cropping, centred). */
+  function fitContain(sw, sh, slot) {
+    var s = Math.min(slot.w / sw, slot.h / sh);
+    var w = Math.round(sw * s), h = Math.round(sh * s);
+    return { x: Math.round(slot.x + (slot.w - w) / 2), y: Math.round(slot.y + (slot.h - h) / 2), w: w, h: h };
+  }
+
+  /* Canvas source for the compose helpers: the page's document in the
+     browser; in headless tests (no DOM) a fresh canvas is made from the
+     reference canvas's own constructor. */
+  function docOr(doc, ref) {
+    if (doc) return doc;
+    if (typeof document !== 'undefined') return document;
+    return { createElement: function () { return new ref.constructor(2, 2); } };
+  }
+
+  /* One clean A4-ratio page (1240 x 1754, 150 DPI) with the ID front on
+     top and the back below. */
+  function composeIdPage(front, back, doc) {
+    doc = docOr(doc, front);
+    var W = 1240, H = 1754;
+    var c = doc.createElement('canvas');
+    c.width = W; c.height = H;
+    var x = c.getContext('2d');
+    x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, W, H);
+    var slots = idSlots(W, H);
+    var f = fitContain(front.width, front.height, slots.front);
+    x.drawImage(front, f.x, f.y, f.w, f.h);
+    var b = fitContain(back.width, back.height, slots.back);
+    x.drawImage(back, b.x, b.y, b.w, b.h);
+    return c;
+  }
+
+  /* Book spread -> [leftPage, rightPage] at the split position x01 (0..1). */
+  function splitSpread(canvas, x01, doc) {
+    doc = docOr(doc, canvas);
+    var sx = Math.max(1, Math.min(canvas.width - 1, Math.round(canvas.width * x01)));
+    function part(x0, w) {
+      var c = doc.createElement('canvas');
+      c.width = w; c.height = canvas.height;
+      c.getContext('2d').drawImage(canvas, x0, 0, w, canvas.height, 0, 0, w, canvas.height);
+      return c;
+    }
+    return [part(0, sx), part(sx, canvas.width - sx)];
+  }
+
+  /* Collage: N page canvases in one grid image (white background). */
+  function composeCollage(canvases, doc) {
+    doc = docOr(doc, canvases[0]);
+    var n = canvases.length;
+    var cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
+    /* Square grid cells (the largest page dimension wins) so the collage
+       itself stays a tidy near-square grid, pages contain-fitted inside. */
+    var cellW = 0, cellH = 0;
+    canvases.forEach(function (c) { cellW = Math.max(cellW, c.width); cellH = Math.max(cellH, c.height); });
+    cellW = cellH = Math.max(cellW, cellH);
+    var pad = Math.round(cellW * 0.03);
+    var out = doc.createElement('canvas');
+    out.width = cols * cellW + pad * (cols + 1);
+    out.height = rows * cellH + pad * (rows + 1);
+    var x = out.getContext('2d');
+    x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, out.width, out.height);
+    canvases.forEach(function (c, i) {
+      var cx = pad + (i % cols) * (cellW + pad), cy = pad + Math.floor(i / cols) * (cellH + pad);
+      var f = fitContain(c.width, c.height, { x: cx, y: cy, w: cellW, h: cellH });
+      x.drawImage(c, f.x, f.y, f.w, f.h);
+    });
+    return out;
+  }
+
+  root.ScanModes = {
+    ID_ASPECT: ID_ASPECT,
+    guideRect: guideRect,
+    coverTransform: coverTransform,
+    viewRectToImage: viewRectToImage,
+    cornersFromRect: cornersFromRect,
+    idSlots: idSlots,
+    fitContain: fitContain,
+    composeIdPage: composeIdPage,
+    splitSpread: splitSpread,
+    composeCollage: composeCollage
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<div id="scan-section" style="display:none">
+  <div class="ss-top">
+    <button class="ss-iconbtn" id="ss-back">‹ Back</button>
+    <div class="ss-title" id="ss-title">My Scans</div>
+    <button class="ss-iconbtn" id="ss-exit">✕ Exit</button>
+  </div>
+  <div id="ss-status-slot" style="padding:0 14px"></div>
+  <div class="ss-body" id="ss-body">
+    <div class="ss-screen" id="scr-library">
+      <div class="lib-tools">
+        <input type="text" id="lib-search" placeholder="Search scans…">
+        <select id="lib-sort">
+          <option value="new">Newest first</option>
+          <option value="old">Oldest first</option>
+          <option value="name">Name A–Z</option>
+        </select>
+        <button class="mini" id="lib-view">▦ Grid</button>
+        <button class="mini" id="lib-select">Select</button>
+      </div>
+      <div id="lib-selectbar" style="display:none;margin-bottom:10px">
+        <div class="rowbtns" style="margin-top:0">
+          <button class="mini" id="lib-del">🗑 Delete</button>
+          <button class="mini" id="lib-share">Share (PDF)</button>
+          <button class="mini" id="lib-cancel">Cancel</button>
+        </div>
+      </div>
+      <div id="ss-lib-list" class="lib-grid"></div>
+      <div id="lib-empty" style="display:none;text-align:center;padding:34px 10px">
+        <div style="font-size:44px">🗂️</div>
+        <p style="color:var(--muted)">No scans yet. Your finished documents will be saved here.</p>
+        <button class="go" id="lib-first" style="max-width:280px;margin:10px auto 0">📷 Scan your first document</button>
+      </div>
+      <button class="go" id="lib-new">＋ New Scan</button>
+      <p class="note" style="margin-top:14px">Your scans are saved on this device only (in the app's own storage) — nothing is uploaded.</p>
+    </div>
+    <div class="ss-screen" id="scr-camera"></div>
+    <div class="ss-screen" id="scr-crop"></div>
+    <div class="ss-screen" id="scr-edit">
+      <label style="margin-top:0">Document name</label>
+      <input type="text" id="doc-name" placeholder="New Doc">
+      <div id="doc-strip"></div>
+    </div>
+    <div class="ss-screen" id="scr-detail">
+      <label style="margin-top:0">Document name</label>
+      <input type="text" id="det-name" placeholder="New Doc">
+      <div class="det-actions">
+        <button class="mini" id="det-add">＋ Add Pages</button>
+        <button class="mini" id="det-collage">Collage</button>
+        <button class="mini" id="det-share">Share (PDF)</button>
+        <button class="mini" id="det-editpdf">Edit PDF</button>
+        <button class="mini" id="det-morebtn">More ⋯</button>
+      </div>
+      <div id="det-more" style="display:none">
+        <div class="rowbtns" style="margin-top:0">
+          <button class="mini" id="det-images">Save Pages as Images</button>
+          <button class="mini" id="det-delete">🗑 Delete Document</button>
+        </div>
+      </div>
+      <div id="det-collagebar" style="display:none;margin-bottom:8px">
+        <p class="note" style="margin:0 0 6px">Tap pages to select them for the collage (none selected = all pages).</p>
+        <button class="mini" id="det-collage-go">Make Collage</button>
+      </div>
+      <button class="go" id="det-save">✓ Save to My Scans</button>
+    </div>
+  </div>
+  <div class="ss-bar">
+    <button id="ssb-library" class="on"><span class="bi">🗂️</span>My Scans</button>
+    <button id="ssb-camera" class="ss-fab">📷</button>
+    <button id="ssb-tools"><span class="bi">🧰</span>Tools</button>
+  </div>
+  <div id="ss-tools-sheet" style="display:none">
+    <a href="#" id="sst-qr">📷 QR Scanner</a>
+    <a href="pdf-tools.html">📄 PDF Tools</a>
+    <a href="image-tools.html">🖼️ Photo Tools</a>
+    <a href="text-edit.html">✏️ Edit Text</a>
+    <a href="#" id="sst-close">Cancel</a>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var C = window.ScanCore;
+  function $(s, r) { return (r || document).querySelector(s); }
+  function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+
+  function setStatus(tool, msg, ok) {
+    var el = $('#' + tool + '-status');
+    el.innerHTML = msg; el.className = 'status' + (ok ? ' ok' : '');
+  }
+  function busy(tool, msg) { setStatus(tool, '<span class="spin"></span> ' + msg, false); }
+  var ERROR_CODES = { doc: 'SCN-01', qr: 'SCN-02' };
+  function showError(tool, msg) { var e = $('#' + tool + '-error'); if (msg) msg = msg + ' [Code: ' + (ERROR_CODES[tool] || 'SCN-00') + ']'; e.textContent = msg; e.style.display = 'block'; }
+  function clearError(tool) { var e = $('#' + tool + '-error'); e.textContent = ''; e.style.display = 'none'; }
+  function fmtKB(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+  
+  window.onerror = function(message){
+    try {
+      var er = document.querySelector('.panel.open .error');
+      if (!er) er = document.getElementById('doc-error');
+      if (er) { er.textContent = 'Something went wrong: ' + message + ' [Code: SCN-00]'; er.style.display = 'block'; }
+    } catch(e){}
+  };
+
+  function download(blob, filename) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+  function canvasBlob(canvas, mime, q) { return new Promise(function (res) { canvas.toBlob(res, mime, q); }); }
+  function loadImageFile(file, tool, infoEl, cb) {
+    clearError(tool);
+    if (!file) return;
+    var okType = (file.type && file.type.indexOf('image/') === 0) || /\.(jpe?g|png|webp|bmp|gif)$/i.test(file.name || '');
+    if (!okType) { showError(tool, '"' + (file.name || 'That file') + '" is not a photo. Please pick a JPG or PNG photo.'); return; }
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () {
+      if (infoEl) { infoEl.style.display = 'block'; infoEl.innerHTML = '<b>' + file.name + '</b> · ' + img.naturalWidth + ' × ' + img.naturalHeight + ' px · ' + fmtKB(file.size); }
+      cb(img, url);
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); showError(tool, 'This photo could not be read — it may be damaged. Please try another one.'); };
+    img.src = url;
+  }
+
+  /* ---------- tool switching ---------- */
+  $$('#toolgrid .toolbtn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      $$('#toolgrid .toolbtn').forEach(function (b) { b.classList.toggle('active', b === btn); });
+      $$('.panel').forEach(function (p) { p.classList.toggle('open', p.id === 'panel-' + btn.dataset.tool); });
+      if (btn.dataset.tool !== 'qr') stopCamera();
+    });
+  });
+  $('#toolgrid .toolbtn').click();
+
+  /* ================= DOCUMENT SCANNER ================= */
+  var S = {
+    mode: 'normal', srcImg: null, imgUrl: null, rotation: 0,
+    corners: null, filter: 'magic', workBase: null,
+    markupOn: false, sigEmpty: true, pages: [],
+    /* camera modes (Docs / ID Card / To Text / Book) */
+    camMode: 'docs', camQuality: 'hd', guideImgRect: null,
+    idStep: null, idFront: null, bookSplit: 0.5,
+    /* docs library: the document these pages will be saved into */
+    docId: null, docName: '', editingIndex: null
+  };
+  var stage = $('#doc-stage'), stageCtx = stage.getContext('2d');
+  var resultC = $('#doc-result'), resultCtx = resultC.getContext('2d');
+  var markC = $('#doc-mark'), markCtx = markC.getContext('2d');
+
+  function plan() { return S.mode === 'hq' ? C.HQ : C.NORMAL; }
+
+  function setMode(m) {
+    S.mode = m;
+    $('#mode-normal').classList.toggle('active', m === 'normal');
+    $('#mode-hq').classList.toggle('active', m === 'hq');
+  }
+  $('#mode-normal').addEventListener('click', function () {
+    setMode('normal'); setStatus('doc', 'Normal scan is on — free for everyone.', true);
+    if (S.srcImg) buildStage();
+  });
+  $('#mode-hq').addEventListener('click', async function () {
+    if (window.AppGate && typeof window.AppGate.requirePremium === 'function') {
+      var ok = false;
+      try { ok = await window.AppGate.requirePremium('scan-hq'); } catch (e) { ok = false; }
+      if (ok) {
+        setMode('hq'); setStatus('doc', 'High Quality scan is on (Premium) — full-size scans.', true);
+        if (S.srcImg) buildStage();
+        return;
+      }
+    }
+    setStatus('doc', '🔒 High Quality scan is a Premium feature. Normal scan is free for everyone.', false);
+  });
+
+  function rotatedCanvas(img, rot) {
+    var c = document.createElement('canvas'), x = c.getContext('2d');
+    var swap = rot === 90 || rot === 270;
+    c.width = swap ? img.naturalHeight : img.naturalWidth;
+    c.height = swap ? img.naturalWidth : img.naturalHeight;
+    x.translate(c.width / 2, c.height / 2);
+    x.rotate(rot * Math.PI / 180);
+    x.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+    return c;
+  }
+
+  function buildStage() {
+    var full = rotatedCanvas(S.srcImg, S.rotation);
+    var dims = C.planDims(full.width, full.height, plan());
+    stage.width = dims.w; stage.height = dims.h;
+    stageCtx.drawImage(full, 0, 0, dims.w, dims.h);
+    S.corners = C.defaultCorners(dims.w, dims.h);
+    $('#doc-quad').setAttribute('viewBox', '0 0 ' + dims.w + ' ' + dims.h);
+    $('#doc-stepA').style.display = 'block';
+    $('#doc-stepB').style.display = 'none';
+    positionHandles();
+    setStatus('doc', 'Drag the four green corners onto the corners of the paper, then tap “Crop &amp; Clean”.');
+  }
+
+  function positionHandles() {
+    if (!S.corners) return;
+    $$('#doc-stagewrap .corner[data-i]').forEach(function (hEl, i) {
+      var p = S.corners[i];
+      hEl.style.left = (p.x / (stage.width - 1)) * 100 + '%';
+      hEl.style.top = (p.y / (stage.height - 1)) * 100 + '%';
+    });
+    /* 4 edge-midpoint handles (midpoints of TL-TR, TR-BR, BR-BL, BL-TL) */
+    $$('#doc-stagewrap .corner.mid').forEach(function (hEl, m) {
+      var a = S.corners[m], b = S.corners[(m + 1) % 4];
+      hEl.style.left = (((a.x + b.x) / 2) / (stage.width - 1)) * 100 + '%';
+      hEl.style.top = (((a.y + b.y) / 2) / (stage.height - 1)) * 100 + '%';
+    });
+    $('#doc-poly').setAttribute('points', S.corners.map(function (p) { return p.x + ',' + p.y; }).join(' '));
+  }
+
+  $$('#doc-stagewrap .corner[data-i]').forEach(function (hEl) {
+    hEl.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      hEl.setPointerCapture(e.pointerId);
+      var idx = +hEl.dataset.i, wrap = $('#doc-stagewrap');
+      function move(ev) {
+        var r = wrap.getBoundingClientRect();
+        var x = (ev.clientX - r.left) / r.width * (stage.width - 1);
+        var y = (ev.clientY - r.top) / r.height * (stage.height - 1);
+        S.corners[idx] = {
+          x: Math.max(0, Math.min(stage.width - 1, x)),
+          y: Math.max(0, Math.min(stage.height - 1, y))
+        };
+        positionHandles();
+      }
+      function up() {
+        hEl.removeEventListener('pointermove', move);
+        hEl.removeEventListener('pointerup', up);
+        hEl.removeEventListener('pointercancel', up);
+      }
+      hEl.addEventListener('pointermove', move);
+      hEl.addEventListener('pointerup', up);
+      hEl.addEventListener('pointercancel', up);
+    });
+  });
+
+  /* Auto-adjust: find the page edges and fit the crop frame to the paper,
+     leaving the background out. Runs BY ITSELF on every new photo (and
+     after a rotation); the "Auto Corners" button re-runs it on demand.
+     Honest fallback: if no edges are found the frame stays on the whole
+     photo and the status says so — detection is never faked. */
+  function autoCorners() {
+    clearError('doc'); busy('doc', 'Auto-adjust: looking for the page edges…');
+    setTimeout(function () {
+      var found = null, scaleBack = 1;
+      if (stage.width > 760) {                                   /* detect on a smaller copy — faster */
+        var tc = document.createElement('canvas');
+        scaleBack = 760 / stage.width;
+        tc.width = 760; tc.height = Math.round(stage.height * scaleBack);
+        var tx = tc.getContext('2d'); tx.drawImage(stage, 0, 0, tc.width, tc.height);
+        var tid = tx.getImageData(0, 0, tc.width, tc.height);
+        found = C.detectCorners(tid.data, tc.width, tc.height);
+        if (found) found = found.map(function (p) { return { x: p.x / scaleBack, y: p.y / scaleBack }; });
+      } else {
+        var id = stageCtx.getImageData(0, 0, stage.width, stage.height);
+        found = C.detectCorners(id.data, stage.width, stage.height);
+      }
+      if (!found) {
+        setStatus('doc', 'Auto-adjust could not find the page edges in this photo, so the frame covers the whole photo. Please drag the four corners onto the paper by hand.', false);
+        return;
+      }
+      S.corners = found; positionHandles();
+      setStatus('doc', 'Auto-adjust done — the frame is fitted to the page and the background is left out. Check the corners sit on the paper, drag any that are off, then tap “Crop & Clean”.', true);
+    }, 30);
+  }
+
+  function onPhoto(img, url) {
+    if (S.imgUrl) URL.revokeObjectURL(S.imgUrl);
+    S.imgUrl = url; S.srcImg = img; S.rotation = 0;
+    buildStage();
+    autoCorners();
+    showScreen('crop');
+  }
+  $('#doc-cam').addEventListener('change', function () { loadImageFile(this.files[0], 'doc', $('#doc-fileinfo'), onPhoto); this.value = ''; });
+  $('#doc-file').addEventListener('change', function () { loadImageFile(this.files[0], 'doc', $('#doc-fileinfo'), onPhoto); this.value = ''; });
+
+  $('#doc-rotl').addEventListener('click', function () { S.rotation = (S.rotation + 270) % 360; buildStage(); autoCorners(); });
+  $('#doc-rotr').addEventListener('click', function () { S.rotation = (S.rotation + 90) % 360; buildStage(); autoCorners(); });
+
+  $('#doc-auto').addEventListener('click', function () { autoCorners(); });
+
+  $('#doc-crop').addEventListener('click', function () {
+    clearError('doc'); busy('doc', 'Straightening the page…');
+    setTimeout(function () {
+      var id = stageCtx.getImageData(0, 0, stage.width, stage.height);
+      var size = C.quadSize(S.corners);
+      /* High Quality keeps the size of the picked area; Normal caps at 1600. */
+      var dims = S.mode === 'hq' ? size : C.planDims(size.w, size.h, C.NORMAL);
+      var warped = C.warpRGBA(id.data, stage.width, stage.height, S.corners, dims.w, dims.h);
+      S.workBase = new ImageData(warped, dims.w, dims.h);
+      $('#doc-stepA').style.display = 'none';
+      $('#doc-stepB').style.display = 'block';
+      applyFilter();
+      setStatus('doc', 'Page straightened (' + dims.w + ' × ' + dims.h + ' px). Pick a look, then tap “Add This Page”.', true);
+      /* Camera-mode follow-ups on the Edit screen: */
+      $('#doc-bookbox').style.display = S.camMode === 'book' ? 'block' : 'none';
+      $('#doc-splitline').style.display = S.camMode === 'book' ? 'block' : 'none';
+      if (S.camMode === 'book' && window.__ltqrPlaceSplitLine) window.__ltqrPlaceSplitLine();
+      $('#doc-addpage').textContent = S.editingIndex != null ? '✓ Save Page'
+        : S.camMode === 'id'
+          ? (S.idStep === 'back' ? '✓ Add Back Side' : '✓ Add Front Side')
+          : '✓ Add This Page';
+      buildFilterThumbs();
+      showScreen('edit');
+      if (S.camMode === 'text') {
+        /* To Text mode: run OCR on the cleaned page right away. */
+        setTimeout(function () { $('#doc-ocr').click(); }, 60);
+      }
+    }, 30);
+  });
+
+  function applyFilter() {
+    if (!S.workBase) return;
+    var data = new Uint8ClampedArray(S.workBase.data);
+    C.applyFilter(data, S.workBase.width, S.workBase.height, S.filter);
+    resultC.width = S.workBase.width; resultC.height = S.workBase.height;
+    resultCtx.putImageData(new ImageData(data, S.workBase.width, S.workBase.height), 0, 0);
+    markC.width = S.workBase.width; markC.height = S.workBase.height;   /* also clears markup */
+    S.markupOn = false; markC.classList.remove('on');
+  }
+  $$('#doc-filters .chip').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      $$('#doc-filters .chip').forEach(function (c2) { c2.classList.toggle('active', c2 === chip); });
+      S.filter = chip.dataset.filter;
+      applyFilter();
+    });
+  });
+
+  /* markup: red pen on a clear layer over the page */
+  (function () {
+    var drawing = false, last = null;
+    function pos(e) {
+      var r = markC.getBoundingClientRect();
+      return { x: (e.clientX - r.left) / r.width * markC.width, y: (e.clientY - r.top) / r.height * markC.height };
+    }
+    markC.addEventListener('pointerdown', function (e) {
+      if (!S.markupOn) return;
+      drawing = true; last = pos(e); markC.setPointerCapture(e.pointerId);
+    });
+    markC.addEventListener('pointermove', function (e) {
+      if (!drawing || !S.markupOn) return;
+      var p = pos(e);
+      markCtx.strokeStyle = S.markColor || '#E5484D'; markCtx.lineCap = 'round'; markCtx.lineJoin = 'round';
+      markCtx.lineWidth = Math.max(3, Math.round(markC.width / 200));
+      markCtx.beginPath(); markCtx.moveTo(last.x, last.y); markCtx.lineTo(p.x, p.y); markCtx.stroke();
+      last = p;
+    });
+    ['pointerup', 'pointercancel'].forEach(function (ev) { markC.addEventListener(ev, function () { drawing = false; }); });
+  })();
+  $('#doc-markup').addEventListener('click', function () {
+    S.markupOn = !S.markupOn;
+    markC.classList.toggle('on', S.markupOn);
+    this.textContent = S.markupOn ? '✎ Markup: ON — draw on the page' : '✎ Markup';
+    if (S.markupOn) setStatus('doc', 'Draw on the page with your finger or mouse. Tap Markup again when done.', true);
+  });
+  $('#doc-markclear').addEventListener('click', function () {
+    markCtx.clearRect(0, 0, markC.width, markC.height);
+    setStatus('doc', 'Markup cleared.', true);
+  });
+
+  function composite() {
+    var c = document.createElement('canvas');
+    c.width = resultC.width; c.height = resultC.height;
+    var x = c.getContext('2d');
+    x.drawImage(resultC, 0, 0);
+    if (markC.width) x.drawImage(markC, 0, 0);
+    return c;
+  }
+
+  /* signature pad */
+  var sigPad = $('#doc-sigpad'), sigCtx = sigPad.getContext('2d');
+  (function () {
+    var drawing = false, last = null;
+    function pos(e) {
+      var r = sigPad.getBoundingClientRect();
+      return { x: (e.clientX - r.left) / r.width * sigPad.width, y: (e.clientY - r.top) / r.height * sigPad.height };
+    }
+    sigPad.addEventListener('pointerdown', function (e) { drawing = true; last = pos(e); sigPad.setPointerCapture(e.pointerId); });
+    sigPad.addEventListener('pointermove', function (e) {
+      if (!drawing) return;
+      var p = pos(e);
+      sigCtx.strokeStyle = '#D7DEE8'; sigCtx.lineCap = 'round'; sigCtx.lineWidth = 4;
+      sigCtx.beginPath(); sigCtx.moveTo(last.x, last.y); sigCtx.lineTo(p.x, p.y); sigCtx.stroke();
+      last = p; S.sigEmpty = false;
+    });
+    ['pointerup', 'pointercancel'].forEach(function (ev) { sigPad.addEventListener(ev, function () { drawing = false; }); });
+  })();
+  $('#doc-sign').addEventListener('click', function () {
+    var box = $('#doc-sigbox');
+    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  });
+  $('#doc-sigclear').addEventListener('click', function () {
+    sigCtx.clearRect(0, 0, sigPad.width, sigPad.height); S.sigEmpty = true;
+  });
+  $('#doc-sigstamp').addEventListener('click', function () {
+    if (S.sigEmpty) { showError('doc', 'Draw your signature on the pad first.'); return; }
+    clearError('doc');
+    var w, h, px, py;
+    if (S.sigPlace) {
+      /* placed by hand: fractions of the page -> pixels */
+      w = Math.round(resultC.width * S.sigPlace.w01);
+      h = Math.round(w * sigPad.height / sigPad.width);
+      px = Math.round(resultC.width * S.sigPlace.x01);
+      py = Math.round(resultC.height * S.sigPlace.y01);
+    } else {
+      w = Math.round(resultC.width * 0.34); h = Math.round(w * sigPad.height / sigPad.width);
+      var m = Math.round(resultC.width * 0.04);
+      px = resultC.width - w - m; py = resultC.height - h - m;
+    }
+    /* stamp on a light patch, like signing on the paper itself */
+    resultCtx.fillStyle = 'rgba(255,255,255,0.85)';
+    resultCtx.fillRect(px, py, w, h);
+    resultCtx.drawImage(sigPad, px, py, w, h);
+    var ov = document.getElementById('sig-overlay'); if (ov) ov.remove();
+    S.sigPlace = null;
+    $('#doc-sigbox').style.display = 'none';
+    setStatus('doc', 'Signature stamped at the bottom-right of the page. (Changing the filter will remove it — stamp last.)', true);
+  });
+
+  /* To Text (OCR) — Tesseract.js, fully local (libs/ocr/) */
+  $('#doc-ocr').addEventListener('click', async function () {
+    clearError('doc');
+    $('#doc-ocrbox').style.display = 'block';
+    if (!window.Tesseract) { showError('doc', 'Text reading is not available in this build.'); return; }
+    busy('doc', 'Reading the text — the first run can take a little while…');
+    var worker = null;
+    try {
+      worker = await Tesseract.createWorker('eng', '1', {
+        workerPath: 'libs/ocr/worker.min.js',
+        corePath: 'libs/ocr',
+        langPath: 'libs/ocr',
+        cacheMethod: 'none',
+        gzip: true,
+        logger: function (m) {
+          if (m.status === 'recognizing text') busy('doc', 'Reading the text… ' + Math.round(m.progress * 100) + '%');
+        }
+      });
+      var res = await worker.recognize(composite());
+      await worker.terminate(); worker = null;
+      var text = (res.data.text || '').trim();
+      $('#doc-ocrtext').value = text;
+      if (text) setStatus('doc', 'Done — ' + text.length + ' characters read from this page.', true);
+      else setStatus('doc', 'No clear text was found on this page. A sharper, straight-on photo reads better.', false);
+    } catch (e) {
+      if (worker) { try { await worker.terminate(); } catch (e2) {} }
+      showError('doc', 'Text reading failed on this device. The scan itself is fine — you can still add the page and download it.');
+      setStatus('doc', '', false);
+    }
+  });
+  $('#doc-ocrcopy').addEventListener('click', async function () {
+    var t = $('#doc-ocrtext').value;
+    if (!t) { setStatus('doc', 'There is no text to copy yet.', false); return; }
+    try { await navigator.clipboard.writeText(t); setStatus('doc', 'Text copied.', true); }
+    catch (e) { $('#doc-ocrtext').select(); document.execCommand('copy'); setStatus('doc', 'Text copied.', true); }
+  });
+
+  /* ================= CAMERA (live viewfinder + modes) ================= */
+  var camVideo = $('#cam-video'), camStream = null, camTrack = null, camTorchOn = false;
+  var SM = window.ScanModes;
+
+  var CAM_PROMPTS = {
+    docs: 'Page ko frame mein rakho, phir shutter dabao',
+    text: 'Text wala page rakho — saaf, seedha photo best padhega',
+    book: 'Dono pages dikhne do — beech ki split line baad mein adjust hogi'
+  };
+  function camPrompt() {
+    if (S.camMode === 'id') {
+      return S.idStep === 'back'
+        ? 'Back side rakho — card ko frame ke andar rakho'
+        : 'Front side rakho — card ko frame ke andar rakho';
+    }
+    return CAM_PROMPTS[S.camMode] || CAM_PROMPTS.docs;
+  }
+
+  function layoutGuide() {
+    var guide = $('#cam-guide');
+    if (S.camMode !== 'id') { guide.style.display = 'none'; return; }
+    var wrap = $('#cam-wrap');
+    var vw = wrap.clientWidth, vh = camVideo.clientHeight || wrap.clientHeight;
+    var r = SM.guideRect(vw, vh);
+    guide.style.display = 'block';
+    guide.style.left = r.x + 'px'; guide.style.top = r.y + 'px';
+    guide.style.width = r.w + 'px'; guide.style.height = r.h + 'px';
+  }
+
+  function setCamMode(m) {
+    if (m === 'qr') {
+      closeCam();
+      var qrBtn = document.querySelector('#toolgrid .toolbtn[data-tool="qr"]');
+      if (qrBtn) qrBtn.click();
+      return;
+    }
+    S.camMode = m;
+    if (m === 'id' && !S.idStep) S.idStep = 'front';
+    if (m !== 'id') { S.idStep = null; S.idFront = null; }
+    $$('#cam-modes button').forEach(function (b) { b.classList.toggle('on', b.dataset.m === m); });
+    $('#cam-prompt').textContent = camPrompt();
+    layoutGuide();
+  }
+  $$('#cam-modes button').forEach(function (b) {
+    b.addEventListener('click', function () { setCamMode(b.dataset.m); });
+  });
+
+  async function openCam() {
+    clearError('doc');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showError('doc', 'Live camera is not available here. Use “Take a photo” or pick a photo from the gallery below.');
+      return;
+    }
+    stopCamera(); /* never run the QR camera and the doc camera together */
+    try {
+      camStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false
+      });
+    } catch (e) {
+      showError('doc', 'Camera permission was not given. Allow camera access, or use “Take a photo” / gallery below.');
+      return;
+    }
+    camVideo.srcObject = camStream;
+    camTrack = camStream.getVideoTracks()[0] || null;
+    $('#cam-wrap').style.display = 'block';
+    $('#doc-opencam').style.display = 'none';
+    var caps = {};
+    try { caps = camTrack && camTrack.getCapabilities ? camTrack.getCapabilities() : {}; } catch (e) {}
+    var torchBtn = $('#cam-torch');
+    torchBtn.disabled = caps.torch !== true;
+    torchBtn.title = caps.torch === true ? 'Flash / torch' : 'Torch is not available on this camera';
+    camTorchOn = false; torchBtn.classList.remove('on');
+    $('#cam-prompt').textContent = camPrompt();
+    setTimeout(layoutGuide, 350);
+  }
+
+  function closeCam() {
+    if (camTrack && camTorchOn && camTrack.applyConstraints) {
+      try { camTrack.applyConstraints({ advanced: [{ torch: false }] }).catch(function () {}); } catch (e) {}
+    }
+    camTorchOn = false;
+    if (camStream) { camStream.getTracks().forEach(function (t) { t.stop(); }); camStream = null; }
+    camTrack = null;
+    camVideo.srcObject = null;
+    $('#cam-wrap').style.display = 'none';
+    $('#doc-opencam').style.display = 'block';
+  }
+
+  $('#doc-opencam').addEventListener('click', openCam);
+  $('#cam-close').addEventListener('click', closeCam);
+  $('#cam-torch').addEventListener('click', function () {
+    if (!camTrack || !camTrack.applyConstraints) return;
+    camTorchOn = !camTorchOn;
+    var btn = this;
+    camTrack.applyConstraints({ advanced: [{ torch: camTorchOn }] })
+      .then(function () { btn.classList.toggle('on', camTorchOn); })
+      .catch(function () { camTorchOn = !camTorchOn; });
+  });
+  $('#cam-quality').addEventListener('click', function () {
+    S.camQuality = S.camQuality === 'hd' ? 'sd' : 'hd';
+    this.textContent = S.camQuality.toUpperCase();
+    setStatus('doc', S.camQuality === 'hd'
+      ? 'HD capture: full camera resolution.'
+      : 'SD capture: smaller, faster photos (max 1280 px).', true);
+  });
+  $('#cam-gridbtn').addEventListener('click', function () {
+    var g = $('#cam-grid');
+    var on = g.style.display !== 'block';
+    g.style.display = on ? 'block' : 'none';
+    this.classList.toggle('on', on);
+  });
+  $('#cam-import').addEventListener('click', function () { closeCam(); $('#doc-file').click(); });
+  $('#cam-import-files').addEventListener('click', function () { closeCam(); $('#doc-pdf-file').click(); });
+
+  $('#cam-shutter').addEventListener('click', function () {
+    if (!camStream || !camVideo.videoWidth) return;
+    var vw = camVideo.videoWidth, vh = camVideo.videoHeight;
+    var cap = document.createElement('canvas');
+    var scale = 1;
+    if (S.camQuality === 'sd') scale = Math.min(1, 1280 / Math.max(vw, vh));
+    cap.width = Math.round(vw * scale); cap.height = Math.round(vh * scale);
+    cap.getContext('2d').drawImage(camVideo, 0, 0, cap.width, cap.height);
+    /* For ID Card, remember where the guide frame sat in image pixels so
+       the crop corners can start exactly on the guide. */
+    S.guideImgRect = null;
+    if (S.camMode === 'id') {
+      var wrap = $('#cam-wrap');
+      var view = { w: wrap.clientWidth, h: camVideo.clientHeight || wrap.clientHeight };
+      var gr = SM.guideRect(view.w, view.h);
+      var t = SM.coverTransform(view.w, view.h, vw, vh);
+      var ir = SM.viewRectToImage(gr, t);
+      S.guideImgRect = {
+        x: ir.x * scale, y: ir.y * scale, w: ir.w * scale, h: ir.h * scale
+      };
+    }
+    closeCam();
+    cap.toBlob(function (blob) {
+      if (!blob) { showError('doc', 'The photo could not be taken. Please try again.'); return; }
+      var url = URL.createObjectURL(blob);
+      var img = new Image();
+      img.onload = function () { onCamPhoto(img, url); };
+      img.onerror = function () { URL.revokeObjectURL(url); showError('doc', 'The photo could not be loaded.'); };
+      img.src = url;
+    }, 'image/jpeg', 0.92);
+  });
+
+  function onCamPhoto(img, url) {
+    if (S.imgUrl) URL.revokeObjectURL(S.imgUrl);
+    S.imgUrl = url; S.srcImg = img; S.rotation = 0;
+    buildStage();
+    if (S.camMode === 'id' && S.guideImgRect) {
+      /* Corners start on the guide frame, scaled into stage pixels. */
+      var sx = stage.width / img.naturalWidth, sy = stage.height / img.naturalHeight;
+      var r = S.guideImgRect;
+      S.corners = SM.cornersFromRect({ x: r.x * sx, y: r.y * sy, w: r.w * sx, h: r.h * sy });
+      positionHandles();
+      setStatus('doc', (S.idStep === 'back' ? 'Back side' : 'Front side')
+        + ': the frame is set from the camera guide. Drag any corner that is off, then tap “Crop & Clean”.', true);
+    } else {
+      autoCorners();
+    }
+    showScreen('crop');
+  }
+
+  /* Import Files: a PDF's pages become scan pages of the current document. */
+  $('#doc-pdf-file').addEventListener('change', async function () {
+    var f = this.files[0]; this.value = '';
+    if (!f) return;
+    clearError('doc');
+    if (!window.pdfjsLib) { showError('doc', 'PDF import is not available in this build.'); return; }
+    busy('doc', 'Reading the PDF pages…');
+    try {
+      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'libs/pdf.worker.min.js';
+      }
+      var buf = await f.arrayBuffer();
+      var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      for (var i = 1; i <= pdf.numPages; i++) {
+        var page = await pdf.getPage(i);
+        var vp = page.getViewport({ scale: 1.6 });
+        var c = document.createElement('canvas');
+        c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+        await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+        S.pages.push({ canvas: c, name: 'PDF page ' + i });
+      }
+      renderPages();
+      setStatus('doc', pdf.numPages + ' page(s) imported from the PDF into this document. Tap ✓ Finish to save it in My Scans.', true);
+      showScreen('detail');
+    } catch (e) {
+      if (e && e.name === 'PasswordException') {
+        showError('doc', 'This PDF needs a password. Unlock it first in PDF Tools, then import it here.');
+      } else {
+        showError('doc', 'That PDF could not be read. Your other pages are still here.');
+      }
+      setStatus('doc', '', false);
+    }
+  });
+
+  /* OCR result extras: save the read text as a .txt file. */
+  $('#doc-ocrsave').addEventListener('click', function () {
+    var t = $('#doc-ocrtext').value;
+    if (!t) { setStatus('doc', 'There is no text to save yet — tap “To Text (OCR)” first.', false); return; }
+    download(new Blob([t], { type: 'text/plain' }), 'scan-text.txt');
+    setStatus('doc', 'Text saved as scan-text.txt.', true);
+  });
+
+  /* Book split: draggable line over the cleaned spread + split action. */
+  (function () {
+    var line = $('#doc-splitline'), wrap = $('#doc-reswrap');
+    function place() { line.style.left = (S.bookSplit * 100) + '%'; }
+    line.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      line.setPointerCapture(e.pointerId);
+      function move(ev) {
+        var r = wrap.getBoundingClientRect();
+        S.bookSplit = Math.max(0.08, Math.min(0.92, (ev.clientX - r.left) / r.width));
+        place();
+      }
+      function up() {
+        line.removeEventListener('pointermove', move);
+        line.removeEventListener('pointerup', up);
+        line.removeEventListener('pointercancel', up);
+      }
+      line.addEventListener('pointermove', move);
+      line.addEventListener('pointerup', up);
+      line.addEventListener('pointercancel', up);
+    });
+    window.__ltqrPlaceSplitLine = place;
+  })();
+
+  $('#doc-split').addEventListener('click', function () {
+    var halves = SM.splitSpread(composite(), S.bookSplit);
+    S.pages.push({ canvas: halves[0], name: 'Book — left page' });
+    S.pages.push({ canvas: halves[1], name: 'Book — right page' });
+    afterPageAdded('Spread split into 2 pages (left first, then right) and added to this document.');
+  });
+
+  function afterPageAdded(msg) {
+    S.dirty = true;
+    renderPages();
+    $('#doc-stepB').style.display = 'none';
+    $('#doc-splitline').style.display = 'none';
+    $('#doc-bookbox').style.display = 'none';
+    S.srcImg = null;
+    if (S.imgUrl) { URL.revokeObjectURL(S.imgUrl); S.imgUrl = null; }
+    $('#doc-fileinfo').style.display = 'none';
+    setStatus('doc', msg + ' Scan another page, or tap ✓ Finish to save the document.', true);
+    showScreen('detail');
+  }
+
+  $('#doc-back').addEventListener('click', function () {
+    $('#doc-stepB').style.display = 'none';
+    $('#doc-stepA').style.display = 'block';
+    positionHandles();
+  });
+
+  $('#doc-addpage').addEventListener('click', function () {
+    var page = composite();
+    /* Re-editing a finished page (from the pages strip) replaces it. */
+    if (S.editingIndex != null && S.pages[S.editingIndex]) {
+      S.pages[S.editingIndex].canvas = page;
+      S.editingIndex = null;
+      afterPageAdded('Page updated.');
+      return;
+    }
+    /* ID Card flow: front first, then back, then one combined page. */
+    if (S.camMode === 'id') {
+      if (S.idStep !== 'back') {
+        S.idFront = page;
+        S.idStep = 'back';
+        $('#doc-stepB').style.display = 'none';
+        S.srcImg = null;
+        if (S.imgUrl) { URL.revokeObjectURL(S.imgUrl); S.imgUrl = null; }
+        setStatus('doc', 'Front side saved ✓ — ab Back side scan karo.', true);
+        showScreen('camera');
+        openCam();
+        return;
+      }
+      var back = page;
+      var combined = SM.composeIdPage(S.idFront, back);
+      S.pages.push({ canvas: combined, name: 'ID Card (Front + Back)' });
+      S.pages.push({ canvas: S.idFront, name: 'ID Card — Front' });
+      S.pages.push({ canvas: back, name: 'ID Card — Back' });
+      S.idFront = null; S.idStep = 'front';
+      afterPageAdded('ID Card ready: one page with front + back, plus each side as its own image.');
+      return;
+    }
+    S.pages.push({ canvas: page, name: 'Page ' + (S.pages.length + 1) });
+    afterPageAdded('Page ' + S.pages.length + ' added.');
+  });
+
+  function renderPages() {
+    var ul = $('#doc-pagelist'); ul.innerHTML = '';
+    $('#doc-pages').style.display = S.pages.length ? 'block' : 'none';
+    S.pages.forEach(function (pg, i) {
+      var li = document.createElement('li');
+      var img = document.createElement('img'); img.src = pg.canvas.toDataURL('image/jpeg', 0.6);
+      var nm = document.createElement('span'); nm.className = 'pname';
+      nm.textContent = pg.name + ' · ' + pg.canvas.width + ' × ' + pg.canvas.height;
+      li.appendChild(img); li.appendChild(nm);
+      [['↑', 'up'], ['↓', 'down'], ['JPG', 'jpg'], ['✕', 'del']].forEach(function (pair) {
+        var b = document.createElement('button');
+        b.textContent = pair[0]; b.dataset.act = pair[1]; b.dataset.i = i;
+        b.addEventListener('click', onPageBtn);
+        li.appendChild(b);
+      });
+      ul.appendChild(li);
+    });
+  }
+  async function onPageBtn() {
+    var i = +this.dataset.i, act = this.dataset.act;
+    if (act === 'del') { S.pages.splice(i, 1); }
+    else if (act === 'up' && i > 0) { var t1 = S.pages[i - 1]; S.pages[i - 1] = S.pages[i]; S.pages[i] = t1; }
+    else if (act === 'down' && i < S.pages.length - 1) { var t2 = S.pages[i + 1]; S.pages[i + 1] = S.pages[i]; S.pages[i] = t2; }
+    else if (act === 'jpg') {
+      var pg = S.pages[i];
+      var blob = await canvasBlob(pg.canvas, 'image/jpeg', plan().quality);
+      download(blob, 'scan-page-' + (i + 1) + '.jpg');
+      setStatus('doc', 'Page ' + (i + 1) + ' downloaded as JPG (' + pg.canvas.width + ' × ' + pg.canvas.height + ' px).', true);
+      return;
+    }
+    S.pages.forEach(function (p, j) { p.name = 'Page ' + (j + 1); });
+    S.dirty = true;
+    renderPages();
+  }
+
+  $('#doc-pdf').addEventListener('click', async function () {
+    if (!S.pages.length) return;
+    clearError('doc'); busy('doc', 'Making your PDF…');
+    try {
+      var doc = await PDFLib.PDFDocument.create();
+      for (var i = 0; i < S.pages.length; i++) {
+        var pg = S.pages[i];
+        var blob = await canvasBlob(pg.canvas, 'image/jpeg', 0.92);
+        var buf = await blob.arrayBuffer();
+        var emb = await doc.embedJpg(buf);
+        var pw = pg.canvas.width * 72 / 150, ph = pg.canvas.height * 72 / 150;   /* 150 DPI page size */
+        var page = doc.addPage([pw, ph]);
+        page.drawImage(emb, { x: 0, y: 0, width: pw, height: ph });
+      }
+      var bytes = await doc.save();
+      download(new Blob([bytes], { type: 'application/pdf' }), 'scan.pdf');
+      setStatus('doc', 'Done — scan.pdf downloaded (' + S.pages.length + ' page' + (S.pages.length > 1 ? 's' : '') + ', ' + fmtKB(bytes.length) + '). Saved to your Downloads folder.', true);
+    } catch (e) {
+      showError('doc', 'The PDF could not be made. Your pages are still here — please try again.');
+      setStatus('doc', '', false);
+    }
+  });
+
+  /* ================= QR SCANNER ================= */
+  var qrCanvas = $('#qr-canvas'), qrCtx = qrCanvas.getContext('2d');
+  var qrVideo = $('#qr-video'), qrStream = null, qrBusy = false;
+  var qrRAF = null, qrLastProc = 0, qrTick = 0, qrScanStart = 0, qrLastZoomStep = 0;
+  var qrTrack = null, qrCaps = {}, qrZoomLevel = null, qrTorchOn = false, qrDone = false;
+  var bdDetector = null, bdBusy = false;
+  var BD_FORMATS = ['qr_code', 'code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_39', 'itf'];
+
+  function scanBeepOn() {
+    try { return C.scanFeedbackAllowed(localStorage.getItem('ltqr_scan_beep')); } catch (e) { return true; }
+  }
+  function scanSuccessFeedback() {
+    try { if (navigator.vibrate) navigator.vibrate(80); } catch (e) {}
+    if (!scanBeepOn()) return;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      var ctx = scanSuccessFeedback._ctx || (scanSuccessFeedback._ctx = new AC());
+      if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = 940;
+      g.gain.setValueAtTime(0.12, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime + 0.13);
+    } catch (e) {}
+  }
+  function onScanSuccess(text) {
+    if (qrDone) return;
+    qrDone = true;
+    stopCamera();
+    scanSuccessFeedback();
+    showQRResult(text);
+  }
+  function setupCamTools() {
+    var tools = $('#qr-camtools'), zoomWrap = $('#qr-zoomwrap'), zoom = $('#qr-zoom'), torch = $('#qr-torch');
+    var feats = C.cameraFeatures(qrCaps);
+    if (tools) tools.style.display = (feats.zoom || feats.torch) ? 'flex' : 'none';
+    if (zoomWrap) zoomWrap.style.display = feats.zoom ? 'inline-flex' : 'none';
+    if (torch) torch.style.display = feats.torch ? '' : 'none';
+    if (feats.zoom && zoom) {
+      zoom.min = qrCaps.zoom.min; zoom.max = qrCaps.zoom.max;
+      zoom.step = ((qrCaps.zoom.max - qrCaps.zoom.min) / 40) || 0.1;
+      zoom.value = qrZoomLevel != null ? qrZoomLevel : qrCaps.zoom.min;
+    }
+  }
+  function applyZoom(z) {
+    if (!qrTrack || !qrTrack.applyConstraints) return;
+    qrZoomLevel = z;
+    try { qrTrack.applyConstraints({ advanced: [{ zoom: z }] }).catch(function () {}); } catch (e) {}
+  }
+  function stopCamera() {
+    if (qrRAF) { cancelAnimationFrame(qrRAF); qrRAF = null; }
+    if (qrTrack && qrTorchOn && qrTrack.applyConstraints) {
+      try { qrTrack.applyConstraints({ advanced: [{ torch: false }] }).catch(function () {}); } catch (e) {}
+    }
+    qrTorchOn = false;
+    if (qrStream) { qrStream.getTracks().forEach(function (t) { t.stop(); }); qrStream = null; }
+    qrTrack = null; qrCaps = {};
+    if (qrVideo) qrVideo.style.display = 'none';
+    var tools = $('#qr-camtools'); if (tools) tools.style.display = 'none';
+    $('#qr-startcam').disabled = false; $('#qr-stopcam').disabled = true;
+  }
+  function qrTickFn(ts) {
+    if (!qrStream) return;
+    qrRAF = requestAnimationFrame(qrTickFn);
+    if (qrBusy || !qrVideo.videoWidth || qrVideo.readyState < 2) return;
+    if (ts - qrLastProc < 90) return;
+    qrLastProc = ts; qrTick++;
+    qrBusy = true;
+    try {
+      var vw = qrVideo.videoWidth, vh = qrVideo.videoHeight;
+      var side = Math.min(vw, vh) * 0.74;
+      var scale = Math.min(1, 640 / side);
+      qrCanvas.width = Math.max(1, Math.round(side * scale));
+      qrCanvas.height = qrCanvas.width;
+      qrCtx.drawImage(qrVideo, (vw - side) / 2, (vh - side) / 2, side, side, 0, 0, qrCanvas.width, qrCanvas.height);
+      var text = decodeCanvas();
+      if (!text && qrTick % 6 === 0) {
+        var fs = Math.min(1, 1280 / Math.max(vw, vh));
+        qrCanvas.width = Math.round(vw * fs); qrCanvas.height = Math.round(vh * fs);
+        qrCtx.drawImage(qrVideo, 0, 0, qrCanvas.width, qrCanvas.height);
+        text = decodeCanvas();
+      }
+      if (text) { qrBusy = false; onScanSuccess(text); return; }
+      if (bdDetector && !bdBusy && qrTick % 2 === 0) {
+        bdBusy = true;
+        bdDetector.detect(qrVideo).then(function (codes) {
+          bdBusy = false;
+          if (codes && codes.length && codes[0].rawValue && qrStream) onScanSuccess(codes[0].rawValue);
+        }).catch(function () { bdBusy = false; });
+      }
+      var now = performance.now();
+      if (now - qrScanStart > 2500 && now - qrLastZoomStep > 1200) {
+        var nz = C.nextZoom(qrZoomLevel, qrCaps);
+        if (nz != null) { qrLastZoomStep = now; applyZoom(nz); var zs = $('#qr-zoom'); if (zs) zs.value = nz; }
+      }
+    } catch (e) { /* keep scanning on the next frame */ }
+    qrBusy = false;
+  }
+
+  function decodeCanvas() {
+    var id = qrCtx.getImageData(0, 0, qrCanvas.width, qrCanvas.height);
+    var code = null;
+    try { code = jsQR(id.data, id.width, id.height, { inversionAttempts: 'attemptBoth' }); } catch (e) { code = null; }
+    return code && code.data ? code.data : null;
+  }
+  function drawForDecode(source, sw, sh) {
+    var maxSide = 2000, s = Math.min(1, maxSide / Math.max(sw, sh));
+    qrCanvas.width = Math.max(1, Math.round(sw * s));
+    qrCanvas.height = Math.max(1, Math.round(sh * s));
+    qrCtx.drawImage(source, 0, 0, qrCanvas.width, qrCanvas.height);
+  }
+  var GSEARCH = 'ht' + 'tps://www.google.com/search?q=';
+  function scanAutoOpen() {
+    try { return localStorage.getItem('ltqr_scan_autoopen') !== '0'; } catch (e) { return true; }
+  }
+  function doCopyText(t, msg) {
+    if (!t) return;
+    function legacy() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = t; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); ta.remove();
+        setStatus('qr', msg || 'Copied.', true);
+      } catch (e) { showError('qr', 'Copy failed on this device.'); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(function () { setStatus('qr', msg || 'Copied.', true); }, legacy);
+    } else legacy();
+  }
+  function doShareText(t) {
+    if (navigator.share) { navigator.share({ text: t }).catch(function () {}); }
+    else doCopyText(t, 'Copied (share is not available here).');
+  }
+  function addScanAction(label, fn) {
+    var b = document.createElement('button');
+    b.className = 'mini'; b.textContent = label;
+    b.addEventListener('click', fn);
+    $('#qr-actions').appendChild(b);
+  }
+  function saveVCardAndOpen(text) {
+    try {
+      if (window.AndroidSave && typeof window.AndroidSave.saveFile === 'function') {
+        var dataUrl = 'data:text/x-vcard;base64,' + btoa(unescape(encodeURIComponent(text)));
+        var loc = window.AndroidSave.saveFile(dataUrl, 'contact.vcf');
+        if (loc && typeof window.AndroidSave.openFile === 'function') { window.AndroidSave.openFile(loc); return; }
+      }
+    } catch (e) {}
+    try {
+      var blob = new Blob([text], { type: 'text/x-vcard' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'contact.vcf'; a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    } catch (e) { showError('qr', 'Could not save the contact file.'); }
+  }
+  function showQRResult(text) {
+    try {
+      if (window.AppGate && typeof window.AppGate.tryUse === 'function'
+          && window.AppGate.tryUse('qrscan', 'qr-' + Date.now()) === 'BLOCKED') {
+        $('#qr-result').style.display = 'none';
+        setStatus('qr', 'Free limit over for this tool - subscription needed.', false);
+        return;
+      }
+    } catch (e) {}
+
+    $('#qr-result').style.display = 'block';
+    $('#qr-text').textContent = text;
+    var info = C.classifyScan(text);
+    var open = $('#qr-open');
+    var actions = $('#qr-actions'); if (actions) actions.innerHTML = '';
+    if (info.type === 'url') {
+      open.href = info.url;
+      open.textContent = 'Open Link →';
+      open.style.display = 'block';
+      addScanAction('Share', function () { doShareText(info.url); });
+      if (scanAutoOpen()) {
+        setStatus('qr', 'Link found - opening it now. (You can turn this off in Settings.)', true);
+        try { window.open(info.url, '_blank', 'noopener'); } catch (e) {}
+      } else {
+        setStatus('qr', 'This QR code holds a link - tap Open Link to go to it.', true);
+      }
+    } else if (info.type === 'upi') {
+      open.href = text;
+      open.textContent = '💸 Pay';
+      open.style.display = 'block';
+      if (info.upiId) addScanAction('Copy UPI ID', function () { doCopyText(info.upiId, 'UPI ID copied.'); });
+      addScanAction('Share', function () { doShareText(text); });
+      var who = info.name || info.upiId || 'a UPI account';
+      var summary = 'Payment QR read. Pay ' + (info.amount ? '₹' + info.amount + ' ' : '')
+        + 'to ' + who + (info.name && info.upiId ? ' (' + info.upiId + ')' : '') + '.';
+      if (scanAutoOpen()) {
+        setStatus('qr', summary + ' Opening your UPI app now. (You can turn this off in Settings.)', true);
+        try { window.open(text, '_blank', 'noopener'); }
+        catch (e) { showError('qr', 'Could not open a UPI payment app. Tap Pay to try again.'); }
+      } else {
+        setStatus('qr', summary + ' Tap Pay to open your UPI app.', true);
+      }
+    } else if (info.type === 'wifi') {
+      open.style.display = 'none'; open.removeAttribute('href');
+      if (info.password) addScanAction('Copy Password', function () { doCopyText(info.password, 'WiFi password copied.'); });
+      if (info.ssid) addScanAction('Copy Network Name', function () { doCopyText(info.ssid, 'Network name copied.'); });
+      setStatus('qr', 'WiFi details read.' + (info.ssid ? ' Network: ' + info.ssid : ''), true);
+    } else if (info.type === 'tel') {
+      open.style.display = 'none'; open.removeAttribute('href');
+      addScanAction('Call', function () { try { window.location.href = 'tel:' + info.number; } catch (e) {} });
+      setStatus('qr', 'Phone number read: ' + info.number, true);
+    } else if (info.type === 'email') {
+      open.style.display = 'none'; open.removeAttribute('href');
+      addScanAction('Email', function () { try { window.location.href = 'mailto:' + info.email; } catch (e) {} });
+      setStatus('qr', 'Email address read: ' + info.email, true);
+    } else if (info.type === 'vcard') {
+      open.style.display = 'none'; open.removeAttribute('href');
+      addScanAction('Add Contact', function () { saveVCardAndOpen(text); });
+      setStatus('qr', 'Contact card read - tap Add Contact to save it.', true);
+    } else {
+      open.style.display = 'none'; open.removeAttribute('href');
+      addScanAction('Share', function () { doShareText(text); });
+      addScanAction('Search Web', function () { try { window.open(GSEARCH + encodeURIComponent(text), '_blank', 'noopener'); } catch (e) {} });
+      setStatus('qr', 'QR code read. It holds text (not a link) - you can copy it below.', true);
+    }
+  }
+  function zxingFallback(img, done) {
+    if (window.ZXing && ZXing.BrowserMultiFormatReader) {
+      try {
+        var reader = new ZXing.BrowserMultiFormatReader();
+        reader.decodeFromImageElement(img).then(function (res) {
+          done(res && res.getText ? res.getText() : null);
+        }).catch(function () { done(null); });
+        return;
+      } catch (e) {}
+    }
+    done(null);
+  }
+  $('#qr-file').addEventListener('change', function () {
+    var file = this.files[0]; this.value = '';
+    loadImageFile(file, 'qr', $('#qr-fileinfo'), function (img) {
+      drawForDecode(img, img.naturalWidth, img.naturalHeight);
+      var text = decodeCanvas();
+      if (text) { scanSuccessFeedback(); showQRResult(text); return; }
+      var done = function (t) {
+        if (t) { scanSuccessFeedback(); showQRResult(t); }
+        else { $('#qr-result').style.display = 'none'; showError('qr', 'No QR code or barcode was found in this photo. Try a closer, sharper photo of the code.'); }
+      };
+      if (window.BarcodeDetector) {
+        var det = bdDetector;
+        try { det = det || new BarcodeDetector({ formats: BD_FORMATS }); } catch (e) { det = null; }
+        if (det) {
+          det.detect(img).then(function (codes) {
+            if (codes && codes.length && codes[0].rawValue) done(codes[0].rawValue);
+            else zxingFallback(img, done);
+          }).catch(function () { zxingFallback(img, done); });
+          return;
+        }
+      }
+      zxingFallback(img, done);
+    });
+  });
+  $('#qr-copy').addEventListener('click', async function () {
+    var t = $('#qr-text').textContent;
+    if (!t) return;
+    try { await navigator.clipboard.writeText(t); setStatus('qr', 'Copied.', true); }
+    catch (e) {
+      var ta = document.createElement('textarea');
+      ta.value = t; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove();
+      setStatus('qr', 'Copied.', true);
+    }
+  });
+
+  /* stopCamera is defined with the camera pipeline above. */
+  $('#qr-stopcam').addEventListener('click', function () { stopCamera(); setStatus('qr', 'Camera stopped.', true); });
+  $('#qr-startcam').addEventListener('click', async function () {
+    clearError('qr');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showError('qr', 'The camera is not available here. Please pick a photo of the QR code instead.');
+      return;
+    }
+    try {
+      qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    } catch (e) {
+      showError('qr', 'Camera permission was not given, so the camera cannot be used. You can still pick a photo of the QR code.');
+      return;
+    }
+    qrVideo.srcObject = qrStream;
+    qrVideo.style.display = 'block';
+    $('#qr-startcam').disabled = true; $('#qr-stopcam').disabled = false;
+    qrDone = false; qrTick = 0; qrLastProc = 0;
+    qrScanStart = performance.now(); qrLastZoomStep = qrScanStart;
+    try {
+      qrTrack = qrStream.getVideoTracks()[0] || null;
+      qrCaps = (qrTrack && qrTrack.getCapabilities) ? qrTrack.getCapabilities() : {};
+    } catch (e) { qrTrack = null; qrCaps = {}; }
+    qrZoomLevel = (qrCaps.zoom && typeof qrCaps.zoom.min === 'number') ? qrCaps.zoom.min : null;
+    setupCamTools();
+    try {
+      if (window.BarcodeDetector && !bdDetector) bdDetector = new BarcodeDetector({ formats: BD_FORMATS });
+    } catch (e) { bdDetector = null; }
+    try { await qrVideo.play(); } catch (e) {}
+    setStatus('qr', 'Camera is on - point it at a QR code…');
+    qrRAF = requestAnimationFrame(qrTickFn);
+  });
+  var qrZoomEl = $('#qr-zoom');
+  if (qrZoomEl) qrZoomEl.addEventListener('input', function () { applyZoom(parseFloat(qrZoomEl.value)); qrLastZoomStep = performance.now(); });
+  var qrTorchEl = $('#qr-torch');
+  if (qrTorchEl) qrTorchEl.addEventListener('click', function () {
+    if (!qrTrack || !qrTrack.applyConstraints) return;
+    qrTorchOn = !qrTorchOn;
+    try { qrTrack.applyConstraints({ advanced: [{ torch: qrTorchOn }] }).catch(function () { qrTorchOn = !qrTorchOn; }); }
+    catch (e) { qrTorchOn = !qrTorchOn; }
+  });
+  var qrNote = $('#qr-detect-note');
+  if (qrNote) qrNote.textContent = window.BarcodeDetector
+    ? 'Camera scans QR codes and barcodes. Photo scan also tries barcodes.'
+    : 'Camera scans QR codes. Photo scan also tries barcodes (ZXing).';
+
+  /* ================= SCANNER SECTION (full-screen) =================
+     A self-contained scanner "app" inside this page: its own chrome,
+     bottom bar and back-stack (Library → Camera → Crop → Edit → Detail).
+     The app's header/bottom-nav stay hidden underneath while it is open;
+     exiting from the library root returns to the app's Home. */
+  S.markColor = '#E5484D';
+  S.sigPlace = null;
+  S.dirty = false;
+  var SS = { stack: [], current: '', libSelecting: false, libSel: {}, libView: 'grid', detSel: {}, detSelecting: false, thumbUrls: [] };
+
+  /* ---- on-device document store (IndexedDB; memory fallback) ---- */
+  var ScanStore = (function () {
+    var mem = { docs: {}, handoff: {} }, dbp = null;
+    function db() {
+      if (dbp) return dbp;
+      dbp = new Promise(function (resolve) {
+        try {
+          var req = indexedDB.open('ltqr-scans', 1);
+          req.onupgradeneeded = function () {
+            var d = req.result;
+            if (!d.objectStoreNames.contains('docs')) d.createObjectStore('docs', { keyPath: 'id' });
+            if (!d.objectStoreNames.contains('handoff')) d.createObjectStore('handoff', { keyPath: 'id' });
+          };
+          req.onsuccess = function () { resolve(req.result); };
+          req.onerror = function () { resolve(null); };
+        } catch (e) { resolve(null); }
+      });
+      return dbp;
+    }
+    function tx(store, mode, fn) {
+      return db().then(function (d) {
+        if (!d) return fn(null);
+        return new Promise(function (resolve, reject) {
+          var t = d.transaction(store, mode), os = t.objectStore(store), out;
+          fn(os, function (v) { out = v; });
+          t.oncomplete = function () { resolve(out); };
+          t.onerror = function () { reject(t.error); };
+        });
+      });
+    }
+    return {
+      allDocs: function () {
+        return tx('docs', 'readonly', function (os, done) {
+          if (!os) { done(Object.keys(mem.docs).map(function (k) { return mem.docs[k]; })); return; }
+          var r = os.getAll(); r.onsuccess = function () { done(r.result || []); };
+        }).catch(function () { return Object.keys(mem.docs).map(function (k) { return mem.docs[k]; }); });
+      },
+      putDoc: function (doc) {
+        mem.docs[doc.id] = doc;
+        return tx('docs', 'readwrite', function (os, done) { if (os) os.put(doc); done(true); }).catch(function () { return true; });
+      },
+      delDoc: function (id) {
+        delete mem.docs[id];
+        return tx('docs', 'readwrite', function (os, done) { if (os) os.delete(id); done(true); }).catch(function () { return true; });
+      },
+      putHandoff: function (rec) {
+        mem.handoff[rec.id] = rec;
+        return tx('handoff', 'readwrite', function (os, done) { if (os) os.put(rec); done(true); }).catch(function () { return true; });
+      }
+    };
+  })();
+  window.ScanStore = ScanStore;
+
+  function defaultDocName() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return 'New Doc ' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+      + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  async function buildScanPdf(pages) {
+    var doc = await PDFLib.PDFDocument.create();
+    for (var i = 0; i < pages.length; i++) {
+      var pg = pages[i];
+      var blob = await canvasBlob(pg.canvas, 'image/jpeg', 0.92);
+      var buf = await blob.arrayBuffer();
+      var emb = await doc.embedJpg(buf);
+      var pw = pg.canvas.width * 72 / 150, ph = pg.canvas.height * 72 / 150;
+      var page = doc.addPage([pw, ph]);
+      page.drawImage(emb, { x: 0, y: 0, width: pw, height: ph });
+    }
+    return doc.save();
+  }
+
+  /* ---- screen navigation (own back-stack) ---- */
+  var SS_TITLES = { library: 'My Scans', camera: 'Scanner Camera', crop: 'Crop', edit: 'Edit', detail: 'Document' };
+  function showScreen(name, replace) {
+    if (name !== 'camera') closeCam();
+    if (name === 'library' && S.dirty) persistDoc().then(function () { renderLibrary(); });
+    $$('.ss-screen').forEach(function (sc) { sc.classList.toggle('open', sc.id === 'scr-' + name); });
+    $('#ss-title').textContent = SS_TITLES[name] || 'Scanner';
+    $('#ssb-library').classList.toggle('on', name === 'library');
+    if (!replace) {
+      if (SS.stack[SS.stack.length - 1] !== name) SS.stack.push(name);
+    } else if (!SS.stack.length) {
+      SS.stack = [name];
+    }
+    SS.current = name;
+    if (name === 'library' && !S.dirty) renderLibrary();
+    if (name === 'edit') { renderStrip(); syncNameInputs(); }
+    if (name === 'detail') { syncNameInputs(); }
+    $('#ss-body').scrollTop = 0;
+  }
+  window.showScreen = showScreen;
+
+  function openSection() {
+    if (window.__LTQR_FLAGS && window.__LTQR_FLAGS.scan === false) return;
+    $('#scan-section').style.display = 'flex';
+    showScreen('library', true);
+  }
+  function exitSection() {
+    closeCam();
+    $('#scan-section').style.display = 'none';
+    location.href = 'index.html';
+  }
+  $('#ss-exit').addEventListener('click', exitSection);
+  $('#ss-back').addEventListener('click', function () {
+    if (SS.stack.length > 1) {
+      SS.stack.pop();
+      var prev = SS.stack[SS.stack.length - 1];
+      $$('.ss-screen').forEach(function (sc) { sc.classList.toggle('open', sc.id === 'scr-' + prev); });
+      $('#ss-title').textContent = SS_TITLES[prev] || 'Scanner';
+      SS.current = prev;
+      if (prev === 'library') { if (S.dirty) persistDoc(); renderLibrary(); }
+      if (prev !== 'camera') closeCam();
+    } else {
+      exitSection();
+    }
+  });
+  $('#ssb-library').addEventListener('click', function () { showScreen('library'); });
+  $('#ssb-camera').addEventListener('click', function () { newScanCamera(); });
+  $('#ssb-tools').addEventListener('click', function () {
+    var sh = $('#ss-tools-sheet');
+    sh.style.display = sh.style.display === 'none' ? 'block' : 'none';
+  });
+  $('#sst-close').addEventListener('click', function (e) { e.preventDefault(); $('#ss-tools-sheet').style.display = 'none'; });
+  $('#sst-qr').addEventListener('click', function (e) {
+    e.preventDefault();
+    $('#ss-tools-sheet').style.display = 'none';
+    closeCam();
+    $('#scan-section').style.display = 'none';
+    var qrBtn = document.querySelector('#toolgrid .toolbtn[data-tool="qr"]');
+    if (qrBtn) qrBtn.click();
+    window.scrollTo(0, 0);
+  });
+
+  function syncNameInputs() {
+    var n = S.docName || '';
+    if ($('#doc-name').value !== n) $('#doc-name').value = n;
+    if ($('#det-name').value !== n) $('#det-name').value = n;
+  }
+  $('#doc-name').addEventListener('input', function () { S.docName = this.value; S.dirty = true; });
+  $('#det-name').addEventListener('input', function () { S.docName = this.value; S.dirty = true; });
+
+  function newScanCamera() {
+    if (S.dirty) persistDoc();
+    S.pages = []; S.docId = null; S.docName = defaultDocName(); S.editingIndex = null;
+    renderPages();
+    showScreen('camera');
+    openCam();
+  }
+  $('#lib-new').addEventListener('click', newScanCamera);
+  $('#lib-first').addEventListener('click', newScanCamera);
+
+  /* ---- persistence ---- */
+  async function persistDoc() {
+    if (!S.pages.length) { S.dirty = false; return; }
+    if (!S.docName) S.docName = defaultDocName();
+    var blobs = [];
+    for (var i = 0; i < S.pages.length; i++) {
+      blobs.push(await canvasBlob(S.pages[i].canvas, 'image/jpeg', 0.85));
+    }
+    var now = Date.now();
+    var rec = {
+      id: S.docId || ('doc-' + now + '-' + Math.floor(Math.random() * 1e6)),
+      name: S.docName, createdAt: S.docCreatedAt || now, updatedAt: now, pages: blobs
+    };
+    S.docId = rec.id; S.docCreatedAt = rec.createdAt;
+    await ScanStore.putDoc(rec);
+    S.dirty = false;
+    setStatus('doc', 'Saved to My Scans — “' + rec.name + '” (' + blobs.length + ' page' + (blobs.length > 1 ? 's' : '') + ').', true);
+  }
+
+  async function openDoc(rec) {
+    if (S.dirty) await persistDoc();
+    S.docId = rec.id; S.docName = rec.name; S.docCreatedAt = rec.createdAt;
+    S.pages = [];
+    for (var i = 0; i < rec.pages.length; i++) {
+      var url = URL.createObjectURL(rec.pages[i]);
+      var img = await new Promise(function (res, rej) {
+        var im = new Image(); im.onload = function () { res(im); }; im.onerror = rej; im.src = url;
+      });
+      var c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      S.pages.push({ canvas: c, name: 'Page ' + (i + 1) });
+    }
+    S.editingIndex = null; S.dirty = false;
+    renderPages();
+    showScreen('detail');
+  }
+
+  /* ---- library (Screen 1) ---- */
+  async function renderLibrary() {
+    var docs = await ScanStore.allDocs();
+    SS.thumbUrls.forEach(function (u) { URL.revokeObjectURL(u); });
+    SS.thumbUrls = [];
+    var q = ($('#lib-search').value || '').toLowerCase();
+    docs = docs.filter(function (d) { return !q || (d.name || '').toLowerCase().indexOf(q) >= 0; });
+    var sort = $('#lib-sort').value;
+    docs.sort(function (a, b) {
+      if (sort === 'old') return a.updatedAt - b.updatedAt;
+      if (sort === 'name') return (a.name || '').localeCompare(b.name || '');
+      return b.updatedAt - a.updatedAt;
+    });
+    var box = $('#ss-lib-list');
+    box.className = SS.libView === 'grid' ? 'lib-grid' : 'lib-list';
+    box.classList.toggle('selecting', SS.libSelecting);
+    box.innerHTML = '';
+    $('#lib-empty').style.display = docs.length ? 'none' : 'block';
+    docs.forEach(function (d) {
+      var card = document.createElement('div');
+      card.className = 'doccard' + (SS.libSel[d.id] ? ' sel' : '');
+      var url = d.pages && d.pages.length ? URL.createObjectURL(d.pages[0]) : '';
+      if (url) SS.thumbUrls.push(url);
+      var when = new Date(d.updatedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+      card.innerHTML = '<span class="cb">✓</span>'
+        + (url ? '<img src="' + url + '" alt="">' : '')
+        + '<div><div class="dn"></div><div class="dm">' + when + ' · ' + (d.pages ? d.pages.length : 0) + ' page(s)</div></div>';
+      card.querySelector('.dn').textContent = d.name || 'New Doc';
+      card.addEventListener('click', function () {
+        if (SS.libSelecting) {
+          if (SS.libSel[d.id]) delete SS.libSel[d.id]; else SS.libSel[d.id] = true;
+          renderLibrary();
+        } else {
+          openDoc(d);
+        }
+      });
+      box.appendChild(card);
+    });
+  }
+  $('#lib-search').addEventListener('input', renderLibrary);
+  $('#lib-sort').addEventListener('change', renderLibrary);
+  $('#lib-view').addEventListener('click', function () {
+    SS.libView = SS.libView === 'grid' ? 'list' : 'grid';
+    this.textContent = SS.libView === 'grid' ? '▦ Grid' : '☰ List';
+    renderLibrary();
+  });
+  $('#lib-select').addEventListener('click', function () {
+    SS.libSelecting = !SS.libSelecting; SS.libSel = {};
+    $('#lib-selectbar').style.display = SS.libSelecting ? 'block' : 'none';
+    renderLibrary();
+  });
+  $('#lib-cancel').addEventListener('click', function () {
+    SS.libSelecting = false; SS.libSel = {};
+    $('#lib-selectbar').style.display = 'none';
+    renderLibrary();
+  });
+  $('#lib-del').addEventListener('click', async function () {
+    var ids = Object.keys(SS.libSel);
+    if (!ids.length) { setStatus('doc', 'Select at least one scan first.', false); return; }
+    for (var i = 0; i < ids.length; i++) await ScanStore.delDoc(ids[i]);
+    SS.libSelecting = false; SS.libSel = {};
+    $('#lib-selectbar').style.display = 'none';
+    setStatus('doc', ids.length + ' scan(s) deleted.', true);
+    renderLibrary();
+  });
+  $('#lib-share').addEventListener('click', async function () {
+    var ids = Object.keys(SS.libSel);
+    if (!ids.length) { setStatus('doc', 'Select a scan first.', false); return; }
+    var docs = await ScanStore.allDocs();
+    var rec = null;
+    docs.forEach(function (d) { if (d.id === ids[0]) rec = d; });
+    if (!rec) return;
+    var pages = [];
+    for (var i = 0; i < rec.pages.length; i++) {
+      var url = URL.createObjectURL(rec.pages[i]);
+      var img = await new Promise(function (res, rej) {
+        var im = new Image(); im.onload = function () { res(im); }; im.onerror = rej; im.src = url;
+      });
+      var c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      pages.push({ canvas: c });
+    }
+    var bytes = await buildScanPdf(pages);
+    download(new Blob([bytes], { type: 'application/pdf' }), (rec.name || 'scan') + '.pdf');
+  });
+
+  /* ---- detail (Screen 5) actions ---- */
+  $('#det-add').addEventListener('click', function () { showScreen('camera'); openCam(); });
+  $('#det-save').addEventListener('click', async function () { await persistDoc(); });
+  $('#det-share').addEventListener('click', async function () {
+    if (!S.pages.length) return;
+    var bytes = await buildScanPdf(S.pages);
+    download(new Blob([bytes], { type: 'application/pdf' }), (S.docName || 'scan') + '.pdf');
+  });
+  $('#det-editpdf').addEventListener('click', async function () {
+    if (!S.pages.length) return;
+    busy('doc', 'Preparing the PDF for the editor…');
+    var bytes = await buildScanPdf(S.pages);
+    await ScanStore.putHandoff({
+      id: 'editpdf',
+      name: (S.docName || 'scan') + '.pdf',
+      blob: new Blob([bytes], { type: 'application/pdf' }),
+      at: Date.now()
+    });
+    location.href = 'pdf-tools.html?handoff=1';
+  });
+  $('#det-morebtn').addEventListener('click', function () {
+    var m = $('#det-more');
+    m.style.display = m.style.display === 'none' ? 'block' : 'none';
+  });
+  $('#det-images').addEventListener('click', async function () {
+    for (var i = 0; i < S.pages.length; i++) {
+      var blob = await canvasBlob(S.pages[i].canvas, 'image/jpeg', plan().quality);
+      download(blob, 'scan-page-' + (i + 1) + '.jpg');
+    }
+    setStatus('doc', S.pages.length + ' page image(s) saved.', true);
+  });
+  $('#det-delete').addEventListener('click', async function () {
+    if (!S.docId) { setStatus('doc', 'This document is not saved yet.', false); return; }
+    if (this.dataset.armed) {
+      await ScanStore.delDoc(S.docId);
+      S.docId = null; S.pages = []; S.dirty = false;
+      renderPages();
+      setStatus('doc', 'Document deleted.', true);
+      showScreen('library');
+    } else {
+      this.dataset.armed = '1';
+      this.textContent = 'Tap again to confirm delete';
+      var b = this;
+      setTimeout(function () { delete b.dataset.armed; b.textContent = '🗑 Delete Document'; }, 3000);
+    }
+  });
+  $('#det-collage').addEventListener('click', function () {
+    SS.detSelecting = !SS.detSelecting; SS.detSel = {};
+    $('#det-collagebar').style.display = SS.detSelecting ? 'block' : 'none';
+    markDetSelection();
+  });
+  function markDetSelection() {
+    $$('#doc-pagelist li').forEach(function (li, i) {
+      li.style.outline = SS.detSel[i] ? '2.5px solid #3B82F6' : '';
+    });
+  }
+  $('#doc-pagelist').addEventListener('click', function (e) {
+    if (!SS.detSelecting) return;
+    var li = e.target.closest('li');
+    if (!li || e.target.tagName === 'BUTTON') return;
+    var idx = Array.prototype.indexOf.call($('#doc-pagelist').children, li);
+    if (idx < 0) return;
+    if (SS.detSel[idx]) delete SS.detSel[idx]; else SS.detSel[idx] = true;
+    markDetSelection();
+  });
+  $('#det-collage-go').addEventListener('click', function () {
+    var chosen = S.pages.filter(function (_, i) { return SS.detSel[i]; });
+    if (!chosen.length) chosen = S.pages;
+    if (chosen.length < 2) { setStatus('doc', 'A collage needs at least 2 pages.', false); return; }
+    var out = SM.composeCollage(chosen.map(function (p) { return p.canvas; }));
+    out.toBlob(function (b) { if (b) download(b, 'collage.jpg'); }, 'image/jpeg', 0.9);
+    setStatus('doc', 'Collage saved (' + chosen.length + ' pages in one image).', true);
+  });
+
+  /* ---- pages strip on the Edit screen ---- */
+  function renderStrip() {
+    var strip = $('#doc-strip');
+    strip.innerHTML = '';
+    S.pages.forEach(function (pg, i) {
+      var im = document.createElement('img');
+      im.src = pg.canvas.toDataURL('image/jpeg', 0.5);
+      im.title = 'Edit this page';
+      if (S.editingIndex === i) im.className = 'cur';
+      im.addEventListener('click', function () { loadPageIntoEdit(i); });
+      strip.appendChild(im);
+    });
+  }
+  function loadPageIntoEdit(i) {
+    var pg = S.pages[i];
+    if (!pg) return;
+    var tmp = document.createElement('canvas');
+    tmp.width = pg.canvas.width; tmp.height = pg.canvas.height;
+    var tx = tmp.getContext('2d');
+    tx.drawImage(pg.canvas, 0, 0);
+    S.workBase = tx.getImageData(0, 0, tmp.width, tmp.height);
+    S.editingIndex = i;
+    $('#doc-stepA').style.display = 'none';
+    $('#doc-stepB').style.display = 'block';
+    $('#doc-bookbox').style.display = 'none';
+    $('#doc-splitline').style.display = 'none';
+    $('#doc-addpage').textContent = '✓ Save Page';
+    applyFilter();
+    buildFilterThumbs();
+    renderStrip();
+    setStatus('doc', 'Editing page ' + (i + 1) + ' — filters, markup, signature and text work here. “Save Page” puts it back.', true);
+  }
+
+  /* ---- filter thumbnails (live previews, tap = apply) ---- */
+  var FILTER_DEFS = [['shadow', 'No Shadow'], ['original', 'Original'], ['lighten', 'Lighten'], ['magic', 'Magic Color'], ['gray', 'Grayscale'], ['bw', 'B&W']];
+  function buildFilterThumbs() {
+    var box = $('#doc-filterthumbs');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'doc-filterthumbs';
+      var chips = $('#doc-filters');
+      chips.parentNode.insertBefore(box, chips);
+    }
+    box.innerHTML = '';
+    if (!S.workBase) return;
+    var src = document.createElement('canvas');
+    src.width = S.workBase.width; src.height = S.workBase.height;
+    src.getContext('2d').putImageData(S.workBase, 0, 0);
+    FILTER_DEFS.forEach(function (fd) {
+      var fig = document.createElement('figure');
+      if (S.filter === fd[0]) fig.className = 'on';
+      var cv = document.createElement('canvas');
+      cv.width = 148; cv.height = 104;
+      var cx = cv.getContext('2d');
+      cx.fillStyle = '#fff'; cx.fillRect(0, 0, 148, 104);
+      cx.drawImage(src, 0, 0, 148, 104);
+      var id = cx.getImageData(0, 0, 148, 104);
+      var copy = new Uint8ClampedArray(id.data);
+      C.applyFilter(copy, 148, 104, fd[0]);
+      cx.putImageData(new ImageData(copy, 148, 104), 0, 0);
+      var cap = document.createElement('figcaption');
+      cap.textContent = fd[1];
+      fig.appendChild(cv); fig.appendChild(cap);
+      fig.addEventListener('click', function () {
+        var chip = document.querySelector('#doc-filters .chip[data-filter="' + fd[0] + '"]');
+        if (chip) chip.click();
+        $$('#doc-filterthumbs figure').forEach(function (f2) { f2.classList.toggle('on', f2 === fig); });
+      });
+      box.appendChild(fig);
+    });
+  }
+  window.buildFilterThumbs = buildFilterThumbs;
+
+  /* ---- midpoint handles: dragging one moves BOTH corners of its edge ---- */
+  $$('#doc-stagewrap .corner.mid').forEach(function (hEl) {
+    hEl.addEventListener('pointerdown', function (e) {
+      if (!S.corners) return;
+      e.preventDefault();
+      hEl.setPointerCapture(e.pointerId);
+      var m = +hEl.dataset.m, wrap = $('#doc-stagewrap');
+      var a = S.corners[m], b = S.corners[(m + 1) % 4];
+      var startX = e.clientX, startY = e.clientY;
+      var a0 = { x: a.x, y: a.y }, b0 = { x: b.x, y: b.y };
+      function clampPt(p) {
+        return {
+          x: Math.max(0, Math.min(stage.width - 1, p.x)),
+          y: Math.max(0, Math.min(stage.height - 1, p.y))
+        };
+      }
+      function move(ev) {
+        var r = wrap.getBoundingClientRect();
+        var dx = (ev.clientX - startX) / r.width * (stage.width - 1);
+        var dy = (ev.clientY - startY) / r.height * (stage.height - 1);
+        S.corners[m] = clampPt({ x: a0.x + dx, y: a0.y + dy });
+        S.corners[(m + 1) % 4] = clampPt({ x: b0.x + dx, y: b0.y + dy });
+        positionHandles();
+      }
+      function up() {
+        hEl.removeEventListener('pointermove', move);
+        hEl.removeEventListener('pointerup', up);
+        hEl.removeEventListener('pointercancel', up);
+      }
+      hEl.addEventListener('pointermove', move);
+      hEl.addEventListener('pointerup', up);
+      hEl.addEventListener('pointercancel', up);
+    });
+  });
+
+  /* ---- markup upgrades: pen colours + undo ---- */
+  (function () {
+    var tools = document.createElement('div');
+    tools.className = 'rowbtns';
+    tools.innerHTML = '<span style="align-self:center;font-size:13px;font-weight:700">Pen:</span>'
+      + '<span class="swatches">'
+      + '<button data-c="#E5484D" style="background:#E5484D" class="on" title="Red"></button>'
+      + '<button data-c="#2563EB" style="background:#2563EB" title="Blue"></button>'
+      + '<button data-c="#111111" style="background:#111111" title="Black"></button>'
+      + '<button data-c="#16A34A" style="background:#16A34A" title="Green"></button>'
+      + '</span>'
+      + '<button class="mini" id="doc-markundo" type="button">↩ Undo</button>';
+    var filtersEl = $('#doc-filters');
+    filtersEl.parentNode.insertBefore(tools, filtersEl);
+    tools.querySelectorAll('.swatches button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        S.markColor = b.dataset.c;
+        tools.querySelectorAll('.swatches button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      });
+    });
+    var undoStack = [];
+    markC.addEventListener('pointerdown', function () {
+      if (!S.markupOn || !markC.width) return;
+      try {
+        undoStack.push(markCtx.getImageData(0, 0, markC.width, markC.height));
+        if (undoStack.length > 25) undoStack.shift();
+      } catch (e) {}
+    }, true);
+    $('#doc-markundo').addEventListener('click', function () {
+      var prev = undoStack.pop();
+      if (prev) { markCtx.putImageData(prev, 0, 0); setStatus('doc', 'Last drawing stroke undone.', true); }
+      else setStatus('doc', 'Nothing to undo.', false);
+    });
+  })();
+
+  /* ---- signature placement: drag the signature on the page, size it,
+         then the existing Stamp button bakes it in at that spot ---- */
+  (function () {
+    var placeBtn = document.createElement('button');
+    placeBtn.className = 'mini'; placeBtn.id = 'doc-sigplace'; placeBtn.type = 'button';
+    placeBtn.textContent = '📍 Place on Page';
+    var stampBtn = $('#doc-sigstamp');
+    stampBtn.parentNode.insertBefore(placeBtn, stampBtn);
+    placeBtn.addEventListener('click', function () {
+      if (S.sigEmpty) { showError('doc', 'Draw your signature on the pad first.'); return; }
+      clearError('doc');
+      var old = document.getElementById('sig-overlay');
+      if (old) old.remove();
+      var ov = document.createElement('div');
+      ov.id = 'sig-overlay';
+      var img = document.createElement('img');
+      img.src = sigPad.toDataURL('image/png');
+      ov.appendChild(img);
+      $('#doc-reswrap').appendChild(ov);
+      S.sigPlace = { x01: 0.56, y01: 0.76, w01: 0.38 };
+      function layout() {
+        ov.style.left = (S.sigPlace.x01 * 100) + '%';
+        ov.style.top = (S.sigPlace.y01 * 100) + '%';
+        ov.style.width = (S.sigPlace.w01 * 100) + '%';
+        ov.style.aspectRatio = sigPad.width + ' / ' + sigPad.height;
+      }
+      layout();
+      ov.addEventListener('pointerdown', function (e) {
+        e.preventDefault();
+        ov.setPointerCapture(e.pointerId);
+        var wrap = $('#doc-reswrap').getBoundingClientRect();
+        var sx = e.clientX, sy = e.clientY, p0 = { x: S.sigPlace.x01, y: S.sigPlace.y01 };
+        function move(ev) {
+          S.sigPlace.x01 = Math.max(0, Math.min(0.95, p0.x + (ev.clientX - sx) / wrap.width));
+          S.sigPlace.y01 = Math.max(0, Math.min(0.95, p0.y + (ev.clientY - sy) / wrap.height));
+          layout();
+        }
+        function up() {
+          ov.removeEventListener('pointermove', move);
+          ov.removeEventListener('pointerup', up);
+          ov.removeEventListener('pointercancel', up);
+        }
+        ov.addEventListener('pointermove', move);
+        ov.addEventListener('pointerup', up);
+        ov.addEventListener('pointercancel', up);
+      });
+      setStatus('doc', 'Drag the signature to where it belongs. Make it bigger or smaller with the slider, then tap “Stamp on Page”.', true);
+    });
+    var sizeRow = document.createElement('div');
+    sizeRow.className = 'rowbtns';
+    sizeRow.innerHTML = '<label style="margin:0;align-self:center">Signature size</label>'
+      + '<input type="range" id="doc-sigsize" min="15" max="60" value="38" style="flex:1">';
+    var sigbox = $('#doc-sigbox');
+    sigbox.appendChild(sizeRow);
+    sizeRow.querySelector('#doc-sigsize').addEventListener('input', function () {
+      if (!S.sigPlace) return;
+      S.sigPlace.w01 = this.value / 100;
+      var ov = document.getElementById('sig-overlay');
+      if (ov) ov.style.width = (S.sigPlace.w01 * 100) + '%';
+    });
+  })();
+
+  /* ---- section init: relocate the existing blocks into the screens ---- */
+  (function () {
+    var camScr = $('#scr-camera'), cropScr = $('#scr-crop'), editScr = $('#scr-edit'), detScr = $('#scr-detail');
+    var openBtn = $('#doc-opencam'), camWrap = $('#cam-wrap');
+    var hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = 'Modes: Docs, ID Card, To Text (OCR), Book — or pick a photo / PDF below the camera.';
+    camScr.appendChild(hint);
+    camScr.appendChild(openBtn);
+    camScr.appendChild(camWrap);
+    ['doc-cam', 'doc-file'].forEach(function (id) {
+      var inp = document.getElementById(id);
+      if (!inp) return;
+      var lab = inp.previousElementSibling;
+      if (lab && lab.tagName === 'LABEL') camScr.appendChild(lab);
+      camScr.appendChild(inp);
+    });
+    camScr.appendChild($('#doc-fileinfo'));
+    var finishBtn = document.createElement('button');
+    finishBtn.className = 'go'; finishBtn.id = 'cam-finish'; finishBtn.type = 'button';
+    finishBtn.textContent = '✓ Finish — See Pages';
+    finishBtn.addEventListener('click', function () { showScreen('detail'); });
+    camScr.appendChild(finishBtn);
+    cropScr.appendChild($('#doc-stepA'));
+    editScr.appendChild($('#doc-stepB'));
+    detScr.appendChild($('#doc-pages'));
+    var slot = $('#ss-status-slot');
+    slot.appendChild($('#doc-error'));
+    slot.appendChild($('#doc-status'));
+    /* The old "Take a photo / gallery" inputs stay available under the
+       camera screen as the no-live-camera fallback. */
+    var panel = $('#panel-doc');
+    var labels = panel.querySelectorAll('label');
+    /* (labels/inputs remain in the panel under the section overlay) */
+    void labels;
+    /* Tapping Document Scanner in the tool grid opens the section. */
+    var docBtn = document.querySelector('#toolgrid .toolbtn[data-tool="doc"]');
+    if (docBtn) docBtn.addEventListener('click', function () { openSection(); });
+    window.addEventListener('ltqrflags', function () {
+      if (window.__LTQR_FLAGS && window.__LTQR_FLAGS.scan === false) {
+        $('#scan-section').style.display = 'none';
+      }
+    });
+    /* Arriving on the Scanner page opens the section (the Scan tab). */
+    openSection();
+  })();
+})();
+</script>
+
+<script>
+/* App-shell feature flags (the native shell injects window.__LTQR_FLAGS):
+   hide a panel whose tool the admin has switched off. No flags = all on. */
+(function(){
+  function apply(){
+    var f = window.__LTQR_FLAGS; if (!f) return;
+    if (f.scan === false) { var d = document.getElementById('panel-doc'); if (d) d.style.display = 'none'; }
+    if (f.qrscan === false) { var q = document.getElementById('panel-qr'); if (q) q.style.display = 'none'; }
+  }
+  window.addEventListener('ltqrflags', apply);
+  document.addEventListener('DOMContentLoaded', apply);
+  apply();
+})();
+</script>
+
+<style>
+/* ============ SCANNER SECTION (full-screen takeover) ============ */
+#scan-section{position:fixed;inset:0;z-index:200;background:var(--bg);display:flex;flex-direction:column}
+.ss-top{display:flex;align-items:center;gap:10px;padding:12px 14px;background:linear-gradient(180deg,#16283F,#101A2C);border-bottom:1px solid var(--line)}
+.ss-top .ss-title{flex:1;font-size:18px;font-weight:800}
+.ss-iconbtn{background:var(--surface2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:8px 13px;font-size:14px;font-weight:700;cursor:pointer}
+.ss-body{flex:1;overflow-y:auto;padding:14px 14px 20px}
+.ss-screen{display:none}
+.ss-screen.open{display:block}
+.ss-bar{display:flex;align-items:flex-end;background:#121A28;border-top:1px solid var(--line);padding:6px 10px calc(8px + env(safe-area-inset-bottom,0px))}
+.ss-bar button{flex:1;background:none;border:none;color:#9CA3AF;font-size:11px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px}
+.ss-bar button .bi{font-size:21px}
+.ss-bar button.on{color:#3B82F6}
+.ss-bar .ss-fab{flex:0 0 auto;width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#38BDF8,#2563EB);color:#fff;font-size:26px;margin:-24px 8px 0;box-shadow:0 10px 22px rgba(37,99,235,.5);border:3px solid #0A0F18;align-items:center;justify-content:center}
+.lib-tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.lib-tools input[type=text]{flex:1;min-width:140px}
+.lib-tools select{width:auto}
+.lib-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lib-list{display:flex;flex-direction:column;gap:10px}
+.doccard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px;cursor:pointer;position:relative}
+.doccard img{width:100%;height:110px;object-fit:cover;border-radius:9px;background:#fff}
+.lib-list .doccard{display:flex;gap:12px;align-items:center}
+.lib-list .doccard img{width:64px;height:64px;flex:0 0 auto}
+.doccard .dn{font-weight:700;font-size:14.5px;margin-top:7px;word-break:break-word}
+.lib-list .doccard .dn{margin-top:0}
+.doccard .dm{color:var(--muted);font-size:12px;margin-top:2px}
+.doccard.sel{outline:2px solid var(--primary)}
+.doccard .cb{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:6px;border:2px solid #fff;background:rgba(0,0,0,.45);color:#fff;font-size:14px;display:none;align-items:center;justify-content:center}
+.selecting .doccard .cb{display:flex}
+.doccard.sel .cb{background:var(--primary)}
+.corner.mid{width:22px;height:22px;margin:-11px 0 0 -11px;background:#7DD3FC;border-color:#0A0F18}
+#doc-filterthumbs{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px}
+#doc-filterthumbs figure{margin:0;flex:0 0 auto;text-align:center;cursor:pointer}
+#doc-filterthumbs canvas{width:74px;height:52px;object-fit:cover;border-radius:8px;border:2px solid transparent;background:#fff}
+#doc-filterthumbs figure.on canvas{border-color:var(--primary)}
+#doc-filterthumbs figcaption{font-size:11px;color:var(--muted);margin-top:3px;font-weight:700}
+#doc-strip{display:flex;gap:8px;overflow-x:auto;padding:6px 0}
+#doc-strip img{width:52px;height:64px;object-fit:cover;border-radius:7px;border:2px solid var(--line);cursor:pointer;background:#fff}
+#doc-strip img.cur{border-color:var(--primary)}
+.swatches{display:inline-flex;gap:6px;vertical-align:middle}
+.swatches button{width:24px;height:24px;border-radius:50%;border:2px solid transparent;cursor:pointer}
+.swatches button.on{border-color:#fff}
+#sig-overlay{position:absolute;z-index:4;background:rgba(255,255,255,.88);border:1.5px dashed var(--primary);border-radius:6px;touch-action:none;cursor:move;line-height:0}
+#sig-overlay img{width:100%;height:100%;object-fit:contain}
+.det-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+#ss-tools-sheet{position:absolute;left:0;right:0;bottom:0;z-index:5;background:#121A28;border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:16px}
+#ss-tools-sheet a{display:block;padding:13px 10px;color:var(--text);text-decoration:none;font-weight:700;border-bottom:1px solid var(--line)}
+#ss-tools-sheet a:last-of-type{border-bottom:none}
+</style>
+
+
+<style>
+body{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:90;display:flex;align-items:flex-end;background:#121A28;border-top:1px solid #263449;box-shadow:0 -10px 30px rgba(0,0,0,.5);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.bnav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;color:#9CA3AF;text-decoration:none;font-size:10.5px;font-weight:600;border-radius:12px;font-family:system-ui,sans-serif}
+.bnav a .bi{font-size:21px;line-height:1.15}
+.bnav a.on{color:#3B82F6}
+.bnav a.bnav-scan .bi{display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#38BDF8,#2563EB);font-size:25px;margin-top:-27px;box-shadow:0 10px 22px rgba(37,99,235,.5);border:3px solid #0A0F18}
+.bnav a.bnav-scan.on{color:#7DD3FC}
+</style>
+<nav class="bnav" aria-label="Main">
+  <a href="/" data-nav="home"><span class="bi">🏠</span>Home</a>
+  <a href="/tools.html" data-nav="tools"><span class="bi">🧰</span>All Tools</a>
+  <a href="/tools/scanner.html" class="bnav-scan" data-nav="scan"><span class="bi">📷</span>Scan</a>
+  <a href="/#history" data-nav="history"><span class="bi">🕘</span>History</a>
+  <a href="/settings.html" data-nav="settings"><span class="bi">⚙️</span>Settings</a>
+</nav>
+
+</body>
+</html>

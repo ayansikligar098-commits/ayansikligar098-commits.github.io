@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terms &amp; Conditions — Link To QR</title>
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body class="site">
+<button type="button" id="ltqrBack" style="display:inline-flex;align-items:center;gap:6px;margin:12px 14px 0;padding:8px 18px;border:1px solid #263449;border-radius:999px;background:#121A28;color:#EDF1F0;font:600 14px system-ui,sans-serif;cursor:pointer">← Back</button>
+<script>
+document.getElementById('ltqrBack').addEventListener('click', function(){
+  try { if (window.history.length > 1) { window.history.back(); return; } } catch(e){}
+  try { window.location.href = '/'; } catch(e){}
+});
+</script>
+<div id="siteHeader"></div>
+<div class="wrap doc">
+  <h1>Terms &amp; Conditions</h1>
+  <p class="muted">Link To QR — Android app and this website. Last updated: 13 November 2026.</p>
+
+  <h2>Using the service</h2>
+  <p>Link To QR provides QR, PDF, photo and scanning tools. Most tools work without an account, within a free monthly limit for signed-in features where shown. By using the app or this website you agree to these terms.</p>
+
+  <h2>Accounts</h2>
+  <ul>
+    <li>You are responsible for your account and for keeping your password safe.</li>
+    <li>Email accounts must be verified with the link we email you before Premium and account features can be used.</li>
+    <li>One account works in both the app and this website, and Premium bought on either works on both.</li>
+  </ul>
+
+  <h2>Premium and payments</h2>
+  <ul>
+    <li>Premium plans and prices are shown in the app/website and can change; the price shown when you pay is the price for that purchase.</li>
+    <li>Payment is made by UPI to the UPI ID shown at the time of purchase. After paying, you submit the UTR number and a payment screenshot.</li>
+    <li>Premium starts only after the admin checks and approves the payment. Approval is normally quick, but is a manual step.</li>
+    <li>Sending a fake or edited payment screenshot, or someone else's UTR, may lead to the request being rejected and the account being banned.</li>
+    <li>If a payment was genuinely made but Premium was not started, contact us with the UTR number and we will fix it or refund the amount to the same UPI ID.</li>
+    <li>Premium time that is already used is not refundable. Approved plans extend any remaining Premium time.</li>
+  </ul>
+
+  <h2>Coupons</h2>
+  <p>Coupons give the discount shown in the app/website at the time of use. A coupon can be switched off by the admin at any time, and a coupon that brings the price to ₹0 still needs admin approval like a normal purchase.</p>
+
+  <h2>Fair use</h2>
+  <ul>
+    <li>Do not try to bypass Premium, free limits, bans or other security of the app or website.</li>
+    <li>Do not use the tools for illegal content or to infringe anyone's rights. You are responsible for the files you process — they stay on your device.</li>
+    <li>The admin may ban accounts that abuse payments or the service.</li>
+  </ul>
+
+  <h2>Availability</h2>
+  <p>We try to keep the service working well, but it is provided "as is" without a guarantee that it will always be available or error-free. Tools process files on your device, so results also depend on your device.</p>
+
+  <h2>Changes</h2>
+  <p>These terms may be updated; the new version will be posted on this page with a new date. Continuing to use the service after a change means you accept the updated terms.</p>
+
+  <h2>Contact</h2>
+  <p>Email: <a href="mailto:ayansikligar98@gmail.com">ayansikligar98@gmail.com</a></p>
+</div>
+<footer class="site-footer">
+  <span>© Link To QR</span><a href="/privacy.html">Privacy Policy</a><a href="/terms.html">Terms &amp; Conditions</a><a href="/">Tools</a>
+</footer>
+<script type="module" src="/js/header.js"></script>
+
+<style>
+body{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:90;display:flex;align-items:flex-end;background:#121A28;border-top:1px solid #263449;box-shadow:0 -10px 30px rgba(0,0,0,.5);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.bnav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;color:#9CA3AF;text-decoration:none;font-size:10.5px;font-weight:600;border-radius:12px;font-family:system-ui,sans-serif}
+.bnav a .bi{font-size:21px;line-height:1.15}
+.bnav a.on{color:#3B82F6}
+.bnav a.bnav-scan .bi{display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#38BDF8,#2563EB);font-size:25px;margin-top:-27px;box-shadow:0 10px 22px rgba(37,99,235,.5);border:3px solid #0A0F18}
+.bnav a.bnav-scan.on{color:#7DD3FC}
+</style>
+<nav class="bnav" aria-label="Main">
+  <a href="/" data-nav="home"><span class="bi">🏠</span>Home</a>
+  <a href="/tools.html" data-nav="tools"><span class="bi">🧰</span>All Tools</a>
+  <a href="/tools/scanner.html" class="bnav-scan" data-nav="scan"><span class="bi">📷</span>Scan</a>
+  <a href="/#history" data-nav="history"><span class="bi">🕘</span>History</a>
+  <a href="/settings.html" data-nav="settings"><span class="bi">⚙️</span>Settings</a>
+</nav>
+<script>
+(function(){ try {
+  var path = ((window.location && location.pathname) || '').split('/').pop() || '';
+  var map = { '':'home', 'index.html':'home', 'tools.html':'tools', 'scanner.html':'scan', 'pdf-tools.html':'tools', 'image-tools.html':'tools', 'text-edit.html':'tools', 'settings.html':'settings' };
+  var key = map[path];
+  if (key){ var el = document.querySelector('.bnav [data-nav="' + key + '"]'); if (el) el.classList.add('on'); }
+  var h = document.querySelector('.bnav [data-nav="history"]');
+  if (h && (path === '' || path === 'index.html') && typeof openHistory === 'function'){
+    h.addEventListener('click', function(ev){ ev.preventDefault(); openHistory(); });
+  }
+} catch(e){} })();
+</script>
+
+</body>
+</html>
