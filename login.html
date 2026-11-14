@@ -238,12 +238,22 @@ $("signupForm").addEventListener("submit", async e => {
 });
 
 $("googleBtn").addEventListener("click", async () => {
+  // Captcha pehle — bina sahi captcha ke Google wala darwaza bhi nahi
+  // khulega (Ayan ka saaf order, 2026-11-14). Jo form dikh raha hai
+  // (Login ya Create Account) usi ka captcha lagega.
+  const cap = curSignup ? suCap : liCap;
+  const inp = $(curSignup ? "suCapIn" : "liCapIn");
+  if (!cap.ok(inp.value)) {
+    msg("Pehle captcha sahi likho — bina sahi captcha ke entry nahi milegi.", "err");
+    cap.redo(); inp.value = ""; return;
+  }
   msg("Opening Google sign-in…");
   try {
     const cred = await signInWithPopup(auth, new GoogleAuthProvider());
     await touchProfile(cred.user);
     msg("Logged in with Google ✓", "ok");
   } catch (err) { msg(authErr(err), "err"); }
+  cap.redo(); inp.value = "";
 });
 
 $("forgotLink").addEventListener("click", async e => {
