@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Login — Link To QR</title>
 <link rel="stylesheet" href="/css/site.css">
+<style>
+  /* Apna khud ka ABCD captcha (Ayan ka order, 2026-11-14) */
+  .caprow{display:flex;gap:8px;align-items:stretch}
+  .caprow canvas{border-radius:11px;border:1px solid var(--line);flex:none}
+  .capbtn{flex:none;width:44px;border-radius:11px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font-size:18px;cursor:pointer}
+  .caprow input{flex:1;text-transform:uppercase}
+</style>
 <!-- TODO(AdSense): After the owner's Google AdSense account is approved,
      paste the AdSense script here with HIS publisher ID (ca-pub-XXXX…) and
      remove this comment. No ID exists yet — do not invent one.
@@ -30,6 +37,12 @@
       <input type="email" id="liEmail" required placeholder="you@example.com" autocomplete="email">
       <label class="f" for="liPass">Password</label>
       <input type="password" id="liPass" required placeholder="Your password" autocomplete="current-password">
+      <label class="f" for="liCapIn" id="liCapLbl">Type the letters in the picture</label>
+      <div class="caprow">
+        <canvas id="liCap" width="150" height="46"></canvas>
+        <button type="button" class="capbtn" id="liCapRe" title="New letters">🔄</button>
+        <input type="text" id="liCapIn" placeholder="Letters" autocomplete="off">
+      </div>
       <div style="margin-top:18px"><button class="btn big" style="width:100%;justify-content:center" id="loginBtn" type="submit">Login</button></div>
       <p style="margin:12px 0 0;text-align:right"><a href="#" id="forgotLink" style="font-size:13px">Forgot password?</a></p>
     </form>
@@ -42,6 +55,12 @@
       <input type="email" id="suEmail" required placeholder="you@example.com" autocomplete="email">
       <label class="f" for="suPass">Password</label>
       <input type="password" id="suPass" required minlength="6" placeholder="At least 6 characters" autocomplete="new-password">
+      <label class="f" for="suCapIn" id="suCapLbl">Type the letters in the picture</label>
+      <div class="caprow">
+        <canvas id="suCap" width="150" height="46"></canvas>
+        <button type="button" class="capbtn" id="suCapRe" title="New letters">🔄</button>
+        <input type="text" id="suCapIn" placeholder="Letters" autocomplete="off">
+      </div>
       <div style="margin-top:18px"><button class="btn big" style="width:100%;justify-content:center" id="signupBtn" type="submit">Create Account</button></div>
       <p class="muted" style="margin-top:10px">We email you a verification link — your account works fully after you tap it (same rule as the app).</p>
     </form>
@@ -78,7 +97,7 @@
 <script type="module" src="/js/header.js"></script>
 <script type="module">
 import {
-  auth, onAuthStateChanged, signInWithEmailAndPassword,
+  auth, db, doc, getDoc, onAuthStateChanged, signInWithEmailAndPassword,
   createUserWithEmailAndPassword, sendEmailVerification,
   sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup,
   updateProfile, needsEmailVerify, touchProfile, esc
@@ -99,30 +118,105 @@ const authErr = e => {
   return c ? "Something went wrong. Please try again. (" + c + ")" : "Something went wrong. Please try again.";
 };
 
+let curSignup = false;
 function setTab(signup) {
+  curSignup = signup;
   $("tabLogin").classList.toggle("on", !signup);
   $("tabSignup").classList.toggle("on", signup);
   $("loginForm").classList.toggle("hidden", signup);
   $("signupForm").classList.toggle("hidden", !signup);
-  $("pageTitle").textContent = signup ? "Create your account" : "Welcome back";
+  if (!auth.currentUser) $("pageTitle").textContent = signup ? "Create your account" : "Welcome back";
   msg("");
 }
+
+/* ---- Apna khud ka captcha: har baar ALAG. Do type beech-beech mein
+   badal kar aate hain — (1) akshar+number wala tedha-medha text,
+   (2) number wala hisaab (jod/ghatav). Galat jawab ya fail koshish par
+   turant naya captcha banta hai. Code sirf is page ke JS mein rehta hai,
+   server par kuch nahi jata. ---- */
+const CAP_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function capStage(cv) {
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height;
+  ctx.fillStyle = "#10151D"; ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 28; i++) {
+    ctx.fillStyle = "rgba(147,197,253," + (0.2 + Math.random() * 0.4).toFixed(2) + ")";
+    ctx.beginPath(); ctx.arc(Math.random() * W, Math.random() * H, Math.random() * 1.8 + 0.4, 0, 7); ctx.fill();
+  }
+  return { ctx, W, H };
+}
+function capNoiseTop(cv) {
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height;
+  for (let i = 0; i < 3; i++) {
+    ctx.strokeStyle = "rgba(147,197,253," + (0.25 + Math.random() * 0.3).toFixed(2) + ")"; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(0, Math.random() * H);
+    ctx.bezierCurveTo(W * 0.3, Math.random() * H, W * 0.6, Math.random() * H, W, Math.random() * H); ctx.stroke();
+  }
+}
+const CAP_COLS = ["#93C5FD", "#BFDBFE", "#7DD3FC", "#FDE68A", "#A5B4FC"];
+function capText(ctx, s, x, size) {
+  ctx.textBaseline = "middle"; ctx.font = "700 " + size + "px 'Courier New',monospace";
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === " ") { x += size * 0.5; continue; }
+    ctx.save(); ctx.translate(x, 23 + (Math.random() * 8 - 4)); ctx.rotate(Math.random() * 0.5 - 0.25);
+    ctx.fillStyle = CAP_COLS[i % CAP_COLS.length]; ctx.fillText(s[i], 0, 0); ctx.restore();
+    x += size * 0.72;
+  }
+}
+function drawTextCaptcha(cv) {
+  let code = "";
+  for (let i = 0; i < 5; i++) code += CAP_CHARS[Math.floor(Math.random() * CAP_CHARS.length)];
+  const { ctx } = capStage(cv);
+  capText(ctx, code, 15, 26);
+  capNoiseTop(cv);
+  return { label: "Type the letters in the picture", check: v => (v || "").trim().toUpperCase() === code };
+}
+function drawMathCaptcha(cv) {
+  let a = 2 + Math.floor(Math.random() * 8), b = 2 + Math.floor(Math.random() * 8);
+  let expr, ans;
+  if (Math.random() < 0.5) { expr = a + " + " + b + " = ?"; ans = a + b; }
+  else { if (b > a) { const t = a; a = b; b = t; } expr = a + " − " + b + " = ?"; ans = a - b; }
+  const { ctx } = capStage(cv);
+  capText(ctx, expr, 13, 22);
+  capNoiseTop(cv);
+  return { label: "Solve the sum in the picture", check: v => parseInt((v || "").trim(), 10) === ans };
+}
+function makeCap(cvId, btnId, lblId, inId) {
+  const cv = $(cvId);
+  let cur = null;
+  const draw = () => {
+    cur = Math.random() < 0.5 ? drawTextCaptcha(cv) : drawMathCaptcha(cv);
+    $(lblId).textContent = cur.label;
+  };
+  draw();
+  $(btnId).addEventListener("click", () => { draw(); $(inId).value = ""; $(inId).focus(); });
+  return { ok: v => cur.check(v), redo: draw };
+}
+const liCap = makeCap("liCap", "liCapRe", "liCapLbl", "liCapIn");
+const suCap = makeCap("suCap", "suCapRe", "suCapLbl", "suCapIn");
 $("tabLogin").addEventListener("click", () => setTab(false));
 $("tabSignup").addEventListener("click", () => setTab(true));
 
 $("loginForm").addEventListener("submit", async e => {
   e.preventDefault();
+  if (!liCap.ok($("liCapIn").value)) {
+    msg("Captcha galat hai — picture dekh kar sahi jawab likho.", "err");
+    liCap.redo(); $("liCapIn").value = ""; return;
+  }
   const b = $("loginBtn"); b.disabled = true; msg("Signing you in…");
   try {
     const cred = await signInWithEmailAndPassword(auth, $("liEmail").value.trim(), $("liPass").value);
     await touchProfile(cred.user);
     msg("Logged in ✓", "ok");
-  } catch (err) { msg(authErr(err), "err"); }
+  } catch (err) { msg(authErr(err), "err"); liCap.redo(); $("liCapIn").value = ""; }
   b.disabled = false;
 });
 
 $("signupForm").addEventListener("submit", async e => {
   e.preventDefault();
+  if (!suCap.ok($("suCapIn").value)) {
+    msg("Captcha galat hai — picture dekh kar sahi jawab likho.", "err");
+    suCap.redo(); $("suCapIn").value = ""; return;
+  }
   const b = $("signupBtn"); b.disabled = true; msg("Creating your account…");
   try {
     const cred = await createUserWithEmailAndPassword(auth, $("suEmail").value.trim(), $("suPass").value);
@@ -139,7 +233,7 @@ $("signupForm").addEventListener("submit", async e => {
         setTimeout(() => { location.href = "/invite.html"; }, 1200);
       }
     } catch (_) {}
-  } catch (err) { msg(authErr(err), "err"); }
+  } catch (err) { msg(authErr(err), "err"); suCap.redo(); $("suCapIn").value = ""; }
   b.disabled = false;
 });
 
@@ -163,8 +257,20 @@ $("forgotLink").addEventListener("click", async e => {
 });
 
 // Verification gate — shown exactly when the app would show it.
-onAuthStateChanged(auth, user => {
+// Login hote hi upar "Welcome, <Naam>" aata hai — naam pehle account ke
+// displayName se, na mile to users doc se, na mile to email ke pehle hisse se.
+onAuthStateChanged(auth, async user => {
   const card = $("verifyCard");
+  if (user) {
+    let name = user.displayName || "";
+    if (!name) {
+      try { const snap = await getDoc(doc(db, "users", user.uid)); if (snap.exists()) name = snap.data().name || ""; } catch (_) {}
+    }
+    if (!name && user.email) name = user.email.split("@")[0];
+    if (name) $("pageTitle").textContent = "Welcome, " + name;
+  } else {
+    $("pageTitle").textContent = curSignup ? "Create your account" : "Welcome back";
+  }
   if (user && needsEmailVerify(user)) {
     $("verifyEmail").textContent = user.email || "";
     card.classList.remove("hidden");
