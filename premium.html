@@ -93,6 +93,17 @@
     <p style="font-size:16px;margin:10px 0 2px">Your balance: <b id="creditBalance">…</b> 🪙</p>
     <p class="muted" id="creditCostLine">HD download cost: 10 credits</p>
     <div class="plans" id="creditPacks"></div>
+    <div style="margin:12px 0 4px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-weight:700">Kitne pack lena hai?</span>
+      <button class="btn" id="creditQtyAdd" type="button">＋ Add</button>
+      <span id="creditQtyPills" class="hidden" style="gap:6px">
+        <button class="btn qty-pill" data-qty="1" type="button">1</button>
+        <button class="btn qty-pill" data-qty="2" type="button">2</button>
+        <button class="btn qty-pill" data-qty="3" type="button">3</button>
+        <button class="btn qty-pill" data-qty="4" type="button">4</button>
+      </span>
+    </div>
+    <p id="creditTotalLine" style="font-size:17px;font-weight:800;margin:6px 0 2px">Final Amount: ₹0</p>
     <div id="creditPaySection">
       <h3>Step 1 — Pay with any UPI app</h3>
       <div class="upi-box"><span>Pay to UPI ID:<br><b id="creditUpiText">…</b></span>
@@ -100,7 +111,7 @@
           <a class="btn" id="creditPayBtn" href="#">Pay in UPI app</a>
         </span>
       </div>
-      <p class="muted">Pack ka exact price pay karo, phir UTR number neeche bhejo. Credits admin approval ke baad milenge.</p>
+      <p class="muted">Upar wale Final Amount ke barabar pay karo, phir UTR number neeche bhejo. Credits admin approval ke baad milenge.</p>
       <h3>Step 2 — Send UTR</h3>
       <label class="f" for="creditUtr">UTR number</label>
       <input type="text" id="creditUtr" placeholder="e.g. 402288776655" inputmode="numeric" maxlength="30">
@@ -369,6 +380,14 @@ async function loadMyRequests() {
 
 /* ---------- credits (v1.14) ---------- */
 let selectedPack = 0;
+let creditQty = 1;
+function paintQtyPills() {
+  document.querySelectorAll(".qty-pill").forEach(b => {
+    const on = Number(b.dataset.qty) === creditQty;
+    b.style.background = on ? "#1d4ed8" : "";
+    b.style.color = on ? "#fff" : "";
+  });
+}
 function creditPacks() {
   const raw = cfg && cfg.creditPacks;
   const list = [];
@@ -395,10 +414,16 @@ function renderCreditPay() {
   const packs = creditPacks();
   const p = packs[selectedPack] || packs[0];
   const upi = (cfg.upiId || "").trim();
+  const totalPrice = p ? p.price * creditQty : 0;
+  const totalCredits = p ? p.credits * creditQty : 0;
   $("creditUpiText").textContent = upi || "(not set by admin yet)";
   $("creditPayBtn").href = upi && p
-    ? "upi://pay?pa=" + encodeURIComponent(upi) + "&pn=" + encodeURIComponent("Link To QR") + "&am=" + p.price + "&cu=INR"
+    ? "upi://pay?pa=" + encodeURIComponent(upi) + "&pn=" + encodeURIComponent("Link To QR") + "&am=" + totalPrice + "&cu=INR"
     : "#";
+  $("creditTotalLine").textContent = p
+    ? "Final Amount: ₹" + totalPrice + " — Kul " + totalCredits + " Credits (" + p.credits + " × " + creditQty + ")"
+    : "Final Amount: ₹0";
+  paintQtyPills();
   const cost = Number(cfg.hdCreditCost) > 0 ? Number(cfg.hdCreditCost) : 10;
   $("creditCostLine").textContent = "HD download cost: " + cost + " credits";
 }
@@ -421,6 +446,16 @@ async function renderCredits(profile) {
   $("creditBalance").textContent = credits;
   renderCreditPacks();
 }
+$("creditQtyAdd").addEventListener("click", () => {
+  const pills = $("creditQtyPills");
+  const show = pills.classList.contains("hidden");
+  pills.classList.toggle("hidden", !show);
+  if (show) pills.style.display = "inline-flex";
+  $("creditQtyAdd").textContent = show ? "× Band" : "＋ Add";
+  paintQtyPills();
+});
+document.querySelectorAll(".qty-pill").forEach(b =>
+  b.addEventListener("click", () => { creditQty = Number(b.dataset.qty) || 1; renderCreditPay(); }));
 $("creditSubmit").addEventListener("click", async () => {
   const m = $("creditMsg"), b = $("creditSubmit");
   const utr = $("creditUtr").value.trim();
@@ -434,7 +469,8 @@ $("creditSubmit").addEventListener("click", async () => {
   try {
     const fields = {
       uid: me.uid, email: me.email || "", name: me.displayName || "",
-      type: "credits", packCredits: p.credits, amount: p.price, amountPaid: p.price,
+      type: "credits", packCredits: p.credits * creditQty, qty: creditQty,
+      amount: p.price * creditQty, amountPaid: p.price * creditQty,
       plan: "", months: 0, couponCode: "", utr: utr, status: "pending",
       createdAt: serverTimestamp()
     };
