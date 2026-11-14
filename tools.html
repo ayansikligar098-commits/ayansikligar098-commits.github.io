@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>All Tools — Link To QR</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/site.css">
+<link rel="stylesheet" href="/css/saas.css">
 <style>
   :root{
     --bg:#0A0F18; --surface:#121A28; --surface2:#1A2436; --line:#263449;
@@ -66,6 +68,12 @@ document.getElementById('ltqrBack').addEventListener('click', function(){
     <p>PDF, photo, scanner and text tools — everything in one place.</p>
   </div>
 </div>
+
+<div class="saas-search tools-search">
+  <span aria-hidden="true">🔍</span>
+  <input type="text" id="toolsSearch" placeholder="Tool dhundho — PDF, Photo, Scanner…" autocomplete="off" aria-label="Search tools">
+</div>
+<p class="saas-noresult" id="toolsNoResult">Koi tool nahi mila.</p>
 
 <main class="hub-main">
   <a class="tool-card" href="/tools/pdf-tools.html">
@@ -181,6 +189,22 @@ body{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
     h.addEventListener('click', function(ev){ ev.preventDefault(); openHistory(); });
   }
 } catch(e){} })();
+</script>
+<script>
+(function(){
+  var input = document.getElementById('toolsSearch');
+  if (!input) return;
+  var noRes = document.getElementById('toolsNoResult');
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.tool-card'));
+  input.addEventListener('input', function(){
+    var q = (input.value || '').trim().toLowerCase(), any = false;
+    cards.forEach(function(c){
+      var show = !q || (c.textContent || '').toLowerCase().indexOf(q) >= 0;
+      c.style.display = show ? '' : 'none'; if (show) any = true;
+    });
+    if (noRes) noRes.style.display = any ? 'none' : 'block';
+  });
+})();
 </script>
 
 </body>

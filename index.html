@@ -2521,6 +2521,7 @@ label{font-size:12.5px}
 </style>
 <style>#adSlot{display:none!important}</style>
 <link rel="stylesheet" href="/css/site.css">
+<link rel="stylesheet" href="/css/saas.css">
 <!-- TODO(AdSense): After the owner's Google AdSense account is approved,
      paste the AdSense script here with HIS publisher ID (ca-pub-XXXX...) and
      remove this comment. No ID exists yet - do not invent one.
@@ -2555,6 +2556,27 @@ label{font-size:12.5px}
     <div class="brand" onclick="goHome()" title="Home" style="cursor:pointer"><span class="logo"><img src="logo.png" alt="Link To QR logo"></span><h1>Link To QR</h1></div>
     <div class="head-actions"><span class="badge">15 Tools</span><button class="hist-btn" id="homeBtn" onclick="goHome()">🏠 Home</button><button class="hist-btn" id="historyBtn" onclick="openHistory()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.3L3 8"/><polyline points="3 3 3 8 8 8"/><polyline points="12 7 12 12 15.5 14"/></svg>History</button></div>
   </header>
+
+  <!-- SAAS HERO (2026-11-14): headline + tool search + category chips.
+       Purely additive — search sirf maujooda tabs/cards ko filter karta
+       hai, koi tool ya ID nahi badla gaya. -->
+  <section class="saas-hero home-only">
+    <h2>Har tool, <span class="grad">ek hi jagah</span> — QR, PDF, Photo aur Scanner</h2>
+    <p>15+ free tools: kisi bhi cheez ka QR banao, PDF jodotodo, passport photo banao, documents scan karo. Tools bina login ke chalte hain — bilkul free.</p>
+    <div class="saas-search">
+      <span aria-hidden="true">🔍</span>
+      <input type="text" id="toolSearch" placeholder="Tool dhundho — jaise UPI, PDF, Passport, WiFi…" autocomplete="off" aria-label="Search tools">
+      <button type="button" class="go" id="toolSearchGo">Search</button>
+    </div>
+    <div class="chip-row" id="chipRow">
+      <button type="button" class="chip on" data-cat="all">✨ All Tools</button>
+      <button type="button" class="chip" data-cat="qr">▦ QR Codes</button>
+      <button type="button" class="chip" data-cat="pdf">📄 PDF</button>
+      <button type="button" class="chip" data-cat="photo">🖼️ Photo</button>
+      <button type="button" class="chip" data-cat="earn">🎁 Earn</button>
+    </div>
+    <p class="saas-noresult" id="toolNoResult">Koi tool nahi mila — kuch aur likh kar dekho, jaise “UPI” ya “PDF”.</p>
+  </section>
 
   <!-- EARN ROW (v1.14): colourful offer cards — Spin goes to the honest
        app-only page, Bonus to the real website redeem page. -->
@@ -3662,6 +3684,61 @@ body{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
     h.addEventListener('click', function(ev){ ev.preventDefault(); openHistory(); });
   }
 } catch(e){} })();
+</script>
+
+<script>
+/* SaaS hero search + category chips (additive; maujooda tabs/cards ko
+   sirf dikhata/chhupata hai — koi tool logic nahi badla). */
+(function(){
+  var input = document.getElementById('toolSearch');
+  if (!input) return;
+  var goBtn = document.getElementById('toolSearchGo');
+  var noRes = document.getElementById('toolNoResult');
+  var cat = 'all';
+  function tabs(){ return Array.prototype.slice.call(document.querySelectorAll('.tabs .tab')); }
+  function links(){ return Array.prototype.slice.call(document.querySelectorAll('.pc-tools a')); }
+  function earns(){ return Array.prototype.slice.call(document.querySelectorAll('.earn-grid .earn-card')); }
+  function label(el){ return (el.textContent || '').toLowerCase(); }
+  function apply(){
+    var q = (input.value || '').trim().toLowerCase();
+    var any = false;
+    tabs().forEach(function(t){
+      var show = (cat === 'all' || cat === 'qr') && (!q || label(t).indexOf(q) >= 0);
+      t.style.display = show ? '' : 'none'; if (show) any = true;
+    });
+    links().forEach(function(a){
+      var txt = label(a);
+      var catOk = cat === 'all' || (cat === 'pdf' && txt.indexOf('pdf') >= 0)
+        || (cat === 'photo' && (txt.indexOf('photo') >= 0 || txt.indexOf('passport') >= 0))
+        || (cat === 'qr' && txt.indexOf('scanner') >= 0);
+      var show = catOk && (!q || txt.indexOf(q) >= 0);
+      a.style.display = show ? '' : 'none'; if (show) any = true;
+    });
+    earns().forEach(function(e){
+      var show = (cat === 'all' || cat === 'earn') && (!q || label(e).indexOf(q) >= 0);
+      e.style.display = show ? '' : 'none'; if (show) any = true;
+    });
+    if (noRes) noRes.style.display = any ? 'none' : 'block';
+  }
+  function openFirst(){
+    var t = tabs().filter(function(x){ return x.style.display !== 'none'; })[0];
+    if (t){ t.click(); t.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    var a = links().filter(function(x){ return x.style.display !== 'none'; })[0];
+    if (a){ location.href = a.href; return; }
+    var e = earns().filter(function(x){ return x.style.display !== 'none'; })[0];
+    if (e){ location.href = e.href; }
+  }
+  input.addEventListener('input', apply);
+  input.addEventListener('keydown', function(ev){ if (ev.key === 'Enter'){ ev.preventDefault(); openFirst(); } });
+  if (goBtn) goBtn.addEventListener('click', openFirst);
+  var chips = document.querySelectorAll('#chipRow .chip');
+  Array.prototype.forEach.call(chips, function(ch){
+    ch.addEventListener('click', function(){
+      Array.prototype.forEach.call(chips, function(c){ c.classList.remove('on'); });
+      ch.classList.add('on'); cat = ch.getAttribute('data-cat') || 'all'; apply();
+    });
+  });
+})();
 </script>
 
 </body>
