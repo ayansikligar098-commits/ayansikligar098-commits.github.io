@@ -6,11 +6,14 @@ import {
 } from "./fb.js";
 
 const NAV = [
-  ["/", "QR Tools"],
+  ["/", "🏠 Home"],
   ["/tools.html", "🧰 All Tools"],
-  ["/premium.html", "Premium"],
-  ["/invite.html", "🎁 Invite & Earn"],
-  ["/support.html", "Support"]
+  ["/spin.html", "🎡 Spin & Earn", "New"],
+  ["/bonus.html", "🎁 Bonus Code"],
+  ["/premium.html", "👑 Premium"],
+  ["/invite.html", "🤝 Invite & Earn"],
+  ["/settings.html", "⚙️ Settings"],
+  ["/support.html", "💬 Support"]
 ];
 
 export function renderHeader(activePath) {
@@ -21,9 +24,14 @@ export function renderHeader(activePath) {
   <header class="site-header">
     <a class="brand" href="/"><span class="mark">▦</span> Link To QR</a>
     <nav class="site-nav">
-      ${NAV.map(([href, label]) =>
-        `<a href="${href}" class="${path === href ? "on" : ""}">${label}</a>`).join("")}
+      ${NAV.map(([href, label, badge]) =>
+        `<a href="${href}" class="${path === href ? "on" : ""}">${label}${badge ? `<span class="nav-badge">${badge}</span>` : ""}</a>`).join("")}
     </nav>
+    <div class="side-prem">
+      <div class="sp-t">👑 Go Premium</div>
+      <p>Saare tools unlimited, bina kisi limit ke</p>
+      <a class="btn" href="/premium.html">Upgrade Now</a>
+    </div>
     <div class="site-head-right">
       <a class="btn" id="dlAppBtn" href="#" style="display:none">⬇ Download App <span class="ver" id="dlVer"></span></a>
       <span class="acct-chip" id="acctChip"><a class="btn ghost" href="/login.html">Login</a></span>
