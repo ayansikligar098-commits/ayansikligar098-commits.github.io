@@ -1,0 +1,1532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:,">
+<title>Passport Photo Maker — Link To QR</title>
+<!--
+  Passport Photo Maker — its own full section (v1.14), modelled on the
+  Scanner section. Flow: Section Home (New Photo + saved sheets) ->
+  Editor (Crop with photo-specification presets / Background / Dress
+  Change) -> Sheet (paper + copies, photos ALWAYS upright at spec size,
+  never rotated — Core.passportLayout) -> Ready (Normal free 150 DPI /
+  HD 300 DPI for credits).
+  Background removal: in the app, ML Kit selfie segmentation runs
+  natively via AppGate.removeBg; everywhere else the corner flood-fill
+  in ImgCore is the fallback (plain backgrounds only — stated in UI).
+  Dress Change is an adjustable OVERLAY system (templates drawn over
+  the photo), not an AI dress swap — stated in UI.
+-->
+<style>
+  :root{
+    --bg:#0A0F18; --surface:#121A28; --surface2:#1A2436; --line:#263449;
+    --text:#F3F4F6; --muted:#9CA3AF; --primary:#3B82F6; --primary-dark:#1D4ED8;
+    --red:#F97066; --gold:#FFC95C; --radius:14px; --shadow:0 8px 24px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+  button{font-family:inherit}
+  .ltqr-redesign header{padding:16px;border-bottom:1px solid var(--line);background:#101A2C;position:sticky;top:0;z-index:5}
+  .ltqr-redesign header h1{margin:0;font-size:20px;letter-spacing:.2px}
+  .ltqr-redesign header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  main{max-width:860px;margin:0 auto;padding:16px 14px 60px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:14px}
+  .card h2{margin:0 0 4px;font-size:17px}
+  .hint{color:var(--muted);font-size:13px;margin:0 0 12px}
+  label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}
+  input[type=text],input[type=number],select{
+    width:100%;background:var(--surface2);border:1px solid var(--line);border-radius:10px;
+    color:var(--text);padding:11px 12px;font-size:15px}
+  input[type=file]{width:100%;background:var(--surface2);border:1px dashed var(--line);
+    border-radius:10px;color:var(--text);padding:12px;font-size:14px}
+  input[type=range]{width:100%}
+  input[type=color]{width:52px;height:40px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);padding:2px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>div{flex:1;min-width:120px}
+  button.go{margin-top:14px;width:100%;background:var(--primary);color:#fff;border:0;
+    border-radius:12px;padding:13px;font-size:15px;font-weight:800;cursor:pointer}
+  button.go:disabled{opacity:.45;cursor:not-allowed}
+  button.go.hd{background:linear-gradient(135deg,#B8860B,#FFC95C);color:#231a00}
+  button.mini{background:var(--surface2);border:1px solid var(--line);color:var(--text);
+    border-radius:10px;padding:10px 12px;font-size:14px;font-weight:700;cursor:pointer}
+  button.mini:disabled{opacity:.45;cursor:not-allowed}
+  .status{margin-top:12px;font-size:14px;min-height:20px}
+  .status.ok{color:#7BD88F}
+  .error{display:none;margin-top:12px;background:#3A1D1A;border:1px solid #7A271A;color:#FECDCA;
+    padding:10px 12px;border-radius:10px;font-size:14px}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--muted);
+    border-top-color:var(--primary);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .note{font-size:12px;color:var(--muted);margin-top:10px}
+  /* section screens */
+  .screen{display:none}
+  .screen.on{display:block}
+  .steps{display:flex;gap:6px;margin:0 0 14px}
+  .steps span{flex:1;text-align:center;font-size:12px;font-weight:700;color:var(--muted);
+    background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 4px}
+  .steps span.on{color:#fff;background:var(--primary);border-color:var(--primary)}
+  /* chips */
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
+  .chip{background:var(--surface2);border:1px solid var(--line);color:var(--text);
+    border-radius:999px;padding:9px 13px;font-size:13.5px;font-weight:700;cursor:pointer}
+  .chip.on{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset;color:#fff}
+  /* tabs */
+  .tabs{display:flex;gap:8px;margin:14px 0 6px}
+  .tab{flex:1;background:var(--surface2);border:1px solid var(--line);color:var(--text);
+    border-radius:12px;padding:11px 6px;font-size:14px;font-weight:800;cursor:pointer;text-align:center}
+  .tab.on{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
+  .tabpage{display:none}
+  .tabpage.on{display:block}
+  /* crop stage */
+  .stagewrap{position:relative;margin-top:12px;line-height:0;user-select:none;-webkit-user-select:none;touch-action:none}
+  .stagewrap img.base{width:100%;height:auto;border-radius:10px;border:1px solid var(--line)}
+  .cropbox{position:absolute;border:2px solid var(--primary);box-shadow:0 0 0 9999px rgba(4,8,16,.55);cursor:move;touch-action:none}
+  .cropbox .hd{position:absolute;width:20px;height:20px;background:var(--primary);border:2px solid #fff;border-radius:50%;touch-action:none}
+  .cropbox .hd.nw{left:-11px;top:-11px;cursor:nwse-resize}
+  .cropbox .hd.ne{right:-11px;top:-11px;cursor:nesw-resize}
+  .cropbox .hd.sw{left:-11px;bottom:-11px;cursor:nesw-resize}
+  .cropbox .hd.se{right:-11px;bottom:-11px;cursor:nwse-resize}
+  .cropbox .guide{position:absolute;left:50%;top:6%;width:56%;height:62%;transform:translateX(-50%);
+    border:1.5px dashed rgba(255,255,255,.55);border-radius:50% 50% 46% 46%;pointer-events:none}
+  /* swatches */
+  .swatches{display:flex;gap:9px;flex-wrap:wrap;margin-top:6px}
+  .sw{width:40px;height:40px;border-radius:50%;border:2px solid var(--line);cursor:pointer;padding:0}
+  .sw.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary)}
+  .sw.keep{width:auto;border-radius:999px;padding:0 14px;font-weight:700;font-size:13px;color:var(--text);background:var(--surface2)}
+  /* dress thumbs */
+  .dressgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px}
+  .dress{border:1px solid var(--line);border-radius:12px;background:var(--surface2);padding:8px;cursor:pointer;text-align:center}
+  .dress.on{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
+  .dress svg{width:100%;height:64px;display:block}
+  .dress span{font-size:12px;font-weight:700;display:block;margin-top:4px}
+  /* saved sheets */
+  .sheetrow{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--line);
+    border-radius:12px;padding:10px 12px;margin-top:9px}
+  .sheetrow .nm{flex:1;font-weight:700;font-size:14px;word-break:break-all}
+  .sheetrow .dt{color:var(--muted);font-size:12px;font-weight:500}
+  .previewbox{text-align:center}
+  .previewbox canvas{max-width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .resultbox{display:none;margin-top:14px;background:#0E2A52;border:1px solid #3B82F6;border-radius:12px;padding:12px 14px}
+  .big-cta{width:100%;background:linear-gradient(135deg,#2563EB,#38BDF8);color:#fff;border:0;border-radius:14px;
+    padding:18px;font-size:17px;font-weight:800;cursor:pointer;box-shadow:0 10px 24px rgba(37,99,235,.35)}
+</style>
+</head>
+<body class="ltqr-redesign">
+<button type="button" id="ltqrBack" style="display:inline-flex;align-items:center;gap:6px;margin:12px 14px 0;padding:8px 18px;border:1px solid #263449;border-radius:999px;background:#121A28;color:#EDF1F0;font:600 14px system-ui,sans-serif;cursor:pointer">← Back</button>
+<script>
+document.getElementById('ltqrBack').addEventListener('click', function(){
+  try { if (window.history.length > 1) { window.history.back(); return; } } catch(e){}
+  window.location.href = '/';
+});
+</script>
+<header>
+  <h1>📘 Passport Photo Maker</h1>
+  <p>Photo → background &amp; dress → print sheet. Photos always stay upright at the official size.</p>
+</header>
+<main>
+  <div class="steps" id="pp-steps">
+    <span data-step="home" class="on">1 · Photo</span>
+    <span data-step="editor">2 · Edit</span>
+    <span data-step="sheet">3 · Sheet</span>
+    <span data-step="ready">4 · Download</span>
+  </div>
+
+  <!-- ============ SCREEN: HOME ============ -->
+  <section class="screen on" id="scr-home">
+    <div class="card" id="pp-dropzone">
+      <h2>New passport photo</h2>
+      <p class="hint">Pick a clear front-facing photo. In the app you can also take one with the camera.</p>
+      <button type="button" class="big-cta" id="pp-new">＋ Choose Photo</button>
+      <p class="note">📥 Photo yahan drag karke bhi daal sakte ho — ya photo copy karke yahan Paste (Ctrl+V) kar do.</p>
+      <button type="button" class="mini" id="pp-sample">🧪 Sample Photo Try Karo</button>
+      <input type="file" id="pp-file" accept="image/*" style="display:none">
+      <div class="error" id="home-error"></div>
+    </div>
+    <div class="card">
+      <h2>My saved sheets</h2>
+      <p class="hint">Sheets you made stay on this phone — download or print them again any time.</p>
+      <div id="pp-saved"><p class="hint">No saved sheets yet.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN: EDITOR ============ -->
+  <section class="screen" id="scr-editor">
+    <div class="card">
+      <h2>Edit photo</h2>
+      <div class="stagewrap" id="pp-stage" style="display:none">
+        <img class="base" id="pp-img" alt="Your photo">
+        <div class="cropbox" id="pp-box"><div class="guide"></div><div class="hd nw"></div><div class="hd ne"></div><div class="hd sw"></div><div class="hd se"></div></div>
+      </div>
+      <div class="tabs">
+        <button type="button" class="tab on" data-tab="crop">✂️ Crop</button>
+        <button type="button" class="tab" data-tab="bg">🎨 Background</button>
+        <button type="button" class="tab" data-tab="dress">👔 Dress</button>
+      </div>
+
+      <div class="tabpage on" id="tab-crop">
+        <label>Photo specification</label>
+        <div class="chips" id="pp-specs"></div>
+        <div class="row" id="pp-custom" style="display:none">
+          <div><label>Width (mm)</label><input type="number" id="pp-cw" min="10" max="200" step="1"></div>
+          <div><label>Height (mm)</label><input type="number" id="pp-ch" min="10" max="200" step="1"></div>
+        </div>
+        <p class="note" id="pp-spec-info"></p>
+        <p class="note">Drag the blue box to move it, drag the corners to resize. The oval is a face guide — keep the face inside it.</p>
+      </div>
+
+      <div class="tabpage" id="tab-bg">
+        <button type="button" class="go" id="pp-remove-bg" style="margin-top:6px">Remove Background</button>
+        <p class="note" id="pp-bg-note">In the app, AI removes the background on your phone. On other photos the automatic remover works best on a plain background.</p>
+        <label>Background colour</label>
+        <div class="swatches" id="pp-swatches"></div>
+        <div class="row" style="align-items:flex-end">
+          <div style="flex:0 0 auto"><label>Custom colour</label><input type="color" id="pp-bg-custom" value="#438EDB"></div>
+          <div><label>Edge softness (plain-bg remover)</label><input type="range" id="pp-tol" min="10" max="80" value="32"></div>
+        </div>
+      </div>
+
+      <div class="tabpage" id="tab-dress">
+        <div class="chips" id="pp-dress-cats">
+          <button type="button" class="chip on" data-cat="men">Men</button>
+          <button type="button" class="chip" data-cat="women">Women</button>
+          <button type="button" class="chip" data-cat="children">Children</button>
+        </div>
+        <div class="dressgrid" id="pp-dresses"></div>
+        <label>Dress size</label>
+        <input type="range" id="pp-dress-size" min="60" max="140" value="100">
+        <label>Dress position (up / down)</label>
+        <input type="range" id="pp-dress-y" min="35" max="85" value="60">
+        <p class="note">Dress templates are overlays placed over your photo — drag the sliders until the collar sits right under the chin.</p>
+      </div>
+
+      <label style="margin-top:16px">Preview</label>
+      <div class="previewbox"><canvas id="pp-preview" width="207" height="266"></canvas></div>
+      <div class="status" id="ed-status"></div>
+      <div class="error" id="ed-error"></div>
+      <button type="button" class="go" id="pp-to-sheet">Next: Make Sheet →</button>
+      <button type="button" class="mini" id="pp-change" style="margin-top:10px">Change photo</button>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN: SHEET ============ -->
+  <section class="screen" id="scr-sheet">
+    <div class="card">
+      <h2>Print sheet</h2>
+      <p class="hint">Every photo stays upright at the official size — only the paper turns, never the photo.</p>
+      <label>Paper size</label>
+      <div class="chips" id="pp-papers"></div>
+      <div class="row" id="pp-paper-custom" style="display:none">
+        <div><label>Paper width (mm)</label><input type="number" id="pp-papw" min="50" max="500" value="210"></div>
+        <div><label>Paper height (mm)</label><input type="number" id="pp-paph" min="50" max="500" value="297"></div>
+      </div>
+      <div id="pp-orient-row">
+        <label>Paper</label>
+        <div class="chips" id="pp-orient">
+          <button type="button" class="chip on" data-o="portrait">Portrait</button>
+          <button type="button" class="chip" data-o="landscape">Landscape</button>
+        </div>
+        <p class="note">Landscape paper fits more photos side by side — every photo stays upright.</p>
+      </div>
+      <div class="row">
+        <div><label>Copies</label>
+          <select id="pp-copies">
+            <option>4</option><option>6</option><option selected>8</option><option>12</option>
+            <option>16</option><option>24</option><option>30</option><option value="custom">Custom…</option>
+          </select>
+        </div>
+        <div id="pp-copies-custom" style="display:none"><label>How many?</label>
+          <input type="number" id="pp-copies-n" min="1" max="60" value="8"></div>
+        <div><label>White border on photos</label>
+          <select id="pp-border"><option value="1" selected>Yes</option><option value="0">No</option></select>
+        </div>
+      </div>
+      <label>Sheet preview</label>
+      <div class="previewbox"><canvas id="pp-sheet-preview"></canvas></div>
+      <p class="note" id="pp-sheet-info"></p>
+      <div class="error" id="sheet-error"></div>
+      <button type="button" class="go" id="pp-make">Create Sheet →</button>
+      <button type="button" class="mini" id="pp-back-editor" style="margin-top:10px">← Back to Edit</button>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN: READY ============ -->
+  <section class="screen" id="scr-ready">
+    <div class="card">
+      <h2>Your sheet is ready ✅</h2>
+      <p class="hint" id="pp-ready-info"></p>
+      <div class="chips" id="pp-ready-tabs" style="margin-bottom:10px">
+        <button type="button" class="chip" data-rt="orig">Original</button>
+        <button type="button" class="chip on" data-rt="result">Result</button>
+      </div>
+      <div class="previewbox" id="pp-orig-wrap" style="display:none"><canvas id="pp-orig-preview"></canvas></div>
+      <div class="previewbox" id="pp-result-wrap"><canvas id="pp-ready-preview"></canvas></div>
+      <div class="resultbox" id="pp-result" style="display:block">
+        <div style="font-size:14px;margin-bottom:10px" id="pp-result-info">Choose a download quality:</div>
+        <label>File format</label>
+        <div class="chips" id="pp-fmt">
+          <button type="button" class="chip on" data-f="jpg">JPG</button>
+          <button type="button" class="chip" data-f="png">PNG</button>
+        </div>
+        <p class="note" id="pp-ready-res"></p>
+        <button type="button" class="go" id="pp-dl-normal" style="margin-top:0">⬇ Download Normal (Free)</button>
+        <button type="button" class="go hd" id="pp-dl-hd">⬇ Download HD · <span id="pp-hd-cost">🪙 10</span></button>
+        <p class="note" id="pp-credits-line">Your credits: …</p>
+        <button type="button" class="mini" id="pp-buy-credits" style="display:none">Buy Credits 🪙</button>
+      </div>
+      <div class="status" id="ready-status"></div>
+      <div class="error" id="ready-error"></div>
+      <button type="button" class="mini" id="pp-again" style="margin-top:10px">Make another sheet</button>
+      <button type="button" class="mini" id="pp-home2" style="margin-top:10px">Section Home</button>
+    </div>
+  </section>
+  <div id="pp-nocredits" style="display:none;position:fixed;inset:0;background:rgba(4,10,20,.72);z-index:60;align-items:center;justify-content:center;padding:18px">
+    <div class="card" style="max-width:340px;width:100%;margin:0">
+      <h2>Credits kam hain 🪙</h2>
+      <p class="hint" id="pp-nocredits-msg"></p>
+      <button type="button" class="go" id="pp-nc-buy" style="margin-top:0">Buy Credits 🪙</button>
+      <button type="button" class="go hd" id="pp-nc-earn">Earn Credits — Premium ke saath FREE 🪙</button>
+      <button type="button" class="mini" id="pp-nc-close" style="margin-top:10px">Baad Me</button>
+    </div>
+  </div>
+</main>
+
+<script id="img-core">
+/* ImgCore — pure image-tool logic. No DOM in here, so the Node test suite
+   (tests/image_tests.js) loads this exact block and tests the same code the
+   page runs. Canvas/DOM work lives in the UI script below. */
+(function(root){
+'use strict';
+var Core = {};
+
+/* ----- Note 8.10: Normal vs HD export plans (HD is genuinely higher) ----- */
+Core.NORMAL = { maxDim: 1600, quality: 0.85 };
+Core.HD     = { maxDim: 0,    quality: 0.97 };  /* maxDim 0 = never downscale */
+
+Core.fmtKB = function(bytes){
+  if(bytes >= 1048576) return (bytes/1048576).toFixed(2)+' MB';
+  return Math.max(1, Math.round(bytes/1024))+' KB';
+};
+Core.mmToPx = function(mm, dpi){ return Math.round(mm / 25.4 * dpi); };
+
+/* Output dims under an export plan: downscale only, longest side capped. */
+Core.planDims = function(w, h, plan){
+  if(!plan || !plan.maxDim) return { w: w, h: h };
+  var m = Math.max(w, h);
+  if(m <= plan.maxDim) return { w: w, h: h };
+  var s = plan.maxDim / m;
+  return { w: Math.max(1, Math.round(w*s)), h: Math.max(1, Math.round(h*s)) };
+};
+
+/* ----- Resize math ----- */
+/* o = { pct } OR { tw, th, lock } — numbers may be 0/empty for "unset". */
+Core.resizeDims = function(w, h, o){
+  o = o || {};
+  var nw, nh;
+  if(o.pct){
+    nw = Math.round(w * o.pct / 100); nh = Math.round(h * o.pct / 100);
+  } else if(o.lock){
+    if(o.tw && o.th){
+      var s = Math.min(o.tw / w, o.th / h);
+      nw = Math.round(w * s); nh = Math.round(h * s);
+    } else if(o.tw){ nw = o.tw; nh = Math.round(o.tw * h / w); }
+    else if(o.th){ nh = o.th; nw = Math.round(o.th * w / h); }
+    else { nw = w; nh = h; }
+  } else {
+    nw = o.tw || w; nh = o.th || h;
+  }
+  return { w: Math.max(1, nw), h: Math.max(1, nh) };
+};
+
+/* Fit (w,h) inside a box, preserving shape. Upscaling allowed (page fit). */
+Core.fitDims = function(w, h, boxW, boxH){
+  var s = Math.min(boxW / w, boxH / h);
+  return { w: Math.max(1, Math.round(w * s)), h: Math.max(1, Math.round(h * s)), scale: s };
+};
+
+/* ----- Crop math ----- */
+Core.MIN_CROP = 10;
+Core.cropClamp = function(box, W, H){
+  var b = { x: box.x, y: box.y, w: box.w, h: box.h };
+  b.w = Math.min(Math.max(b.w, Core.MIN_CROP), W);
+  b.h = Math.min(Math.max(b.h, Core.MIN_CROP), H);
+  b.x = Math.min(Math.max(b.x, 0), W - b.w);
+  b.y = Math.min(Math.max(b.y, 0), H - b.h);
+  return b;
+};
+/* Resize a crop box to the given aspect (w/h), keeping its centre. */
+Core.cropAspect = function(box, aspect, W, H){
+  var cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+  var w = box.w, h = w / aspect;
+  if(h > box.h && box.h * aspect < w){ /* grow from height instead */ }
+  if(h > H){ h = H; w = h * aspect; }
+  if(w > W){ w = W; h = w / aspect; }
+  if(h > H){ h = H; w = h * aspect; }
+  var b = { x: Math.round(cx - w/2), y: Math.round(cy - h/2), w: Math.round(w), h: Math.round(h) };
+  return Core.cropClamp(b, W, H);
+};
+
+/* ----- Target-KB engine (Note 8.8) ----- */
+/* encode(scale, quality) -> Promise<{ size, data }>. The ladder walks down
+   until something fits under targetBytes, then quality is refined upward at
+   that scale (max 4 extra encodes). Total encodes are bounded (<= 15). */
+Core.SIZE_LADDER = [
+  { s: 1.00, q: 0.85 }, { s: 0.85, q: 0.80 }, { s: 0.70, q: 0.75 },
+  { s: 0.55, q: 0.70 }, { s: 0.45, q: 0.62 }, { s: 0.36, q: 0.55 },
+  { s: 0.28, q: 0.50 }, { s: 0.22, q: 0.45 }, { s: 0.16, q: 0.40 }
+];
+Core.targetUnder = async function(encode, targetBytes, ladder){
+  ladder = ladder || Core.SIZE_LADDER;
+  var smallest = null;
+  for(var i = 0; i < ladder.length; i++){
+    var step = ladder[i];
+    var r = await encode(step.s, step.q);
+    r = { size: r.size, data: r.data, scale: step.s, quality: step.q };
+    if(!smallest || r.size < smallest.size) smallest = r;
+    if(r.size <= targetBytes){
+      var best = r, lo = step.q, hi = 0.98;
+      for(var k = 0; k < 4; k++){
+        var mid = (lo + hi) / 2;
+        var r2 = await encode(step.s, mid);
+        if(r2.size <= targetBytes){ best = { size: r2.size, data: r2.data, scale: step.s, quality: mid }; lo = mid; }
+        else hi = mid;
+      }
+      best.found = true;
+      return best;
+    }
+  }
+  smallest.found = false;
+  return smallest;
+};
+/* HD variant: scale stays 1 (full resolution), only quality walks down. */
+Core.HD_QUALITIES = [0.97, 0.90, 0.82, 0.74, 0.66, 0.58, 0.50, 0.42, 0.34, 0.26, 0.20];
+Core.targetUnderHD = async function(encode, targetBytes){
+  var ladder = Core.HD_QUALITIES.map(function(q){ return { s: 1, q: q }; });
+  return Core.targetUnder(encode, targetBytes, ladder);
+};
+/* Grow mode: encode(scale) -> Promise<{size,data}> with a lossless format.
+   Steps up the scale until the file reaches the target (98% of it counts). */
+Core.GROW_SCALES = [1, 1.5, 2, 2.5, 3, 4];
+Core.targetOver = async function(encode, targetBytes){
+  var best = null;
+  for(var i = 0; i < Core.GROW_SCALES.length; i++){
+    var s = Core.GROW_SCALES[i];
+    var r = await encode(s);
+    r = { size: r.size, data: r.data, scale: s };
+    if(!best || r.size > best.size) best = r;
+    if(r.size >= targetBytes * 0.98){ best.reached = true; return best; }
+  }
+  best.reached = false;
+  return best;
+};
+
+/* ----- Passport sheet layout (Note 8.3): photo 35 x 45 mm ----- */
+Core.PASSPORT_W_MM = 35;
+Core.PASSPORT_H_MM = 45;
+/* Centre crop-fill geometry: the source rectangle (in source pixels) that
+   fills a destination box completely — overflow cropped symmetrically.
+   NEVER rotates the source and NEVER squeezes it (aspect is preserved):
+   a landscape photo going into a portrait slot is cropped at the sides,
+   not turned sideways. */
+Core.coverFit = function(srcW, srcH, dstW, dstH){
+  var scale = Math.max(dstW / srcW, dstH / srcH);
+  var sw = Math.min(srcW, Math.round(dstW / scale));
+  var sh = Math.min(srcH, Math.round(dstH / scale));
+  return { sx: Math.round((srcW - sw) / 2), sy: Math.round((srcH - sh) / 2),
+           sw: sw, sh: sh, rotated: false };
+};
+Core.passportLayout = function(o){
+  var dpi = o.dpi;
+  var landscape = o.orientation === 'landscape';
+  var gapMm = (o.gapMm == null ? 3 : o.gapMm);
+  var marginMm = (o.marginMm == null ? 6 : o.marginMm);
+  /* The PAPER orientation decides only the SHEET's shape (Ayan FINAL,
+     2026-11-13 20:26 — the studio sheet photo he approved): Portrait paper
+     = upright sheet; Landscape paper = wide sheet (dims swap). Photos are
+     ALWAYS upright 35 x 45 on the sheet in BOTH orientations — never
+     rotated, never upside down. Only the grid (columns x rows) changes
+     with the paper: e.g. 4x6in Landscape + 8 copies = 4 columns x 2 rows
+     of upright photos. The CROP is never affected either: the cropped
+     photo itself is always the upright 35 x 45 image. */
+  var sheetW = Core.mmToPx(landscape ? o.sheetHmm : o.sheetWmm, dpi),
+      sheetH = Core.mmToPx(landscape ? o.sheetWmm : o.sheetHmm, dpi);
+  /* Photo size defaults to the classic 35x45; the Passport section can
+     pass o.photoWmm / o.photoHmm for other specs (US 2x2in, Canada
+     50x70, China 33x48, custom). Aspect and never-rotate rules are
+     unchanged — only the slot size follows the spec. */
+  var fullW = Core.mmToPx(o.photoWmm || Core.PASSPORT_W_MM, dpi),
+      fullH = Core.mmToPx(o.photoHmm || Core.PASSPORT_H_MM, dpi);
+  var gap = Core.mmToPx(gapMm, dpi), margin = Core.mmToPx(marginMm, dpi);
+  var n = Math.max(1, Math.floor(o.copies) || 1);
+  /* AUTO-FIT (Ayan 19:41): the user picks only the paper and the count.
+     EVERY requested photo goes on the one sheet: we search the columns x
+     rows grid that gives the largest cells, cap cells at the true
+     35 x 45 mm size, and shrink them proportionally (aspect locked) when
+     the count needs more room. Nothing is dropped, cropped or stretched,
+     and nothing ever leaves the paper. `capacity` still reports how many
+     fit at FULL size, for information only. */
+  var capCols = Math.max(1, Math.floor((sheetW - 2*margin + gap) / (fullW + gap)));
+  var capRows = Math.max(1, Math.floor((sheetH - 2*margin + gap) / (fullH + gap)));
+  var capacity = capCols * capRows;
+  var aspect = fullW / fullH; /* slot w/h — always 35:45 upright, both orientations */
+  var availW = sheetW - 2 * margin, availH = sheetH - 2 * margin;
+  var best = null;
+  for(var c = 1; c <= n; c++){
+    var r = Math.ceil(n / c);
+    var cw = (availW - (c - 1) * gap) / c;
+    var ch = (availH - (r - 1) * gap) / r;
+    var w = Math.min(cw, ch * aspect), h = w / aspect;
+    if(w > fullW){ w = fullW; h = fullH; }
+    var area = w * h;
+    if(!best || area >= best.area) best = { cols: c, rows: r, w: w, h: h, area: area };
+  }
+  var cols = best.cols, rows = best.rows;
+  var cellW = Math.max(1, Math.floor(best.w)), cellH = Math.max(1, Math.floor(best.h));
+  var blockH = rows * cellH + (rows - 1) * gap;
+  var y0 = Math.round((sheetH - blockH) / 2);
+  var cells = [];
+  for(var i = 0; i < n; i++){
+    var row = Math.floor(i / cols);
+    /* Each row is centred on its own, so a short last row (or a count below
+       one full row) sits in the middle of the sheet — never left-hanging. */
+    var inRow = Math.min(cols, n - row * cols);
+    var rowW = inRow * cellW + (inRow - 1) * gap;
+    var rowX0 = Math.round((sheetW - rowW) / 2);
+    cells.push({
+      x: rowX0 + (i % cols) * (cellW + gap),
+      y: y0 + row * (cellH + gap),
+      w: cellW, h: cellH
+    });
+  }
+  return { sheetW: sheetW, sheetH: sheetH, cellW: cellW, cellH: cellH,
+           fullW: fullW, fullH: fullH, shrunk: cellW < fullW - 1,
+           cols: cols, rows: rows, capacity: capacity, cells: cells,
+           rotated: false,
+           orientation: landscape ? 'landscape' : 'portrait' };
+};
+/* Draws one cropped passport photo into a sheet cell with CONTAIN-fit: the
+   whole photo is always visible, centred in the slot, aspect untouched —
+   never cropped, never stretched, NEVER rotated (Ayan FINAL 2026-11-13
+   20:26: photos stay upright on the sheet in both paper orientations).
+   The 4th argument is kept for call compatibility and ignored. */
+Core.drawSheetPhoto = function(ctx, photo, cell){
+  var s = Math.min(cell.w / photo.width, cell.h / photo.height);
+  var dw = photo.width * s, dh = photo.height * s;
+  ctx.drawImage(photo, cell.x + (cell.w - dw) / 2, cell.y + (cell.h - dh) / 2, dw, dh);
+};
+
+/* ----- On-device background removal (Note 8.3, free — no API) ----- */
+/* Method: guess the background colour from the 4 corners, flood-fill inward
+   from the photo edges through pixels close to that colour, feather the edge.
+   Honest limit: works on plain backgrounds; busy backgrounds will leak. */
+Core.bgColour = function(data, w, h){
+  var pts = [[0,0],[w-1,0],[0,h-1],[w-1,h-1]], r = 0, g = 0, b = 0, n = 0;
+  var patch = Math.min(4, Math.floor(Math.min(w, h) / 2) || 1);
+  for(var c = 0; c < pts.length; c++){
+    for(var dy = 0; dy < patch; dy++) for(var dx = 0; dx < patch; dx++){
+      var x = Math.min(w-1, Math.max(0, pts[c][0] + (pts[c][0] === 0 ? dx : -dx)));
+      var y = Math.min(h-1, Math.max(0, pts[c][1] + (pts[c][1] === 0 ? dy : -dy)));
+      var i = (y * w + x) * 4;
+      r += data[i]; g += data[i+1]; b += data[i+2]; n++;
+    }
+  }
+  return [Math.round(r/n), Math.round(g/n), Math.round(b/n)];
+};
+Core.floodAlpha = function(data, w, h, tol){
+  var bg = Core.bgColour(data, w, h);
+  var tol2 = tol * tol * 3; /* squared euclidean over 3 channels, tol = per-channel-ish */
+  var total = w * h;
+  var alpha = new Uint8Array(total).fill(255);
+  var seen = new Uint8Array(total);
+  var stack = new Int32Array(total);
+  var sp = 0;
+  function isBg(idx){
+    var i = idx * 4;
+    var dr = data[i] - bg[0], dg = data[i+1] - bg[1], db = data[i+2] - bg[2];
+    return (dr*dr + dg*dg + db*db) <= tol2;
+  }
+  function push(idx){
+    if(!seen[idx] && isBg(idx)){ seen[idx] = 1; stack[sp++] = idx; }
+  }
+  var x, y;
+  for(x = 0; x < w; x++){ push(x); push((h-1)*w + x); }
+  for(y = 0; y < h; y++){ push(y*w); push(y*w + (w-1)); }
+  while(sp > 0){
+    var cur = stack[--sp];
+    alpha[cur] = 0;
+    var cx = cur % w, cy = (cur / w) | 0;
+    if(cx > 0) push(cur - 1);
+    if(cx < w - 1) push(cur + 1);
+    if(cy > 0) push(cur - w);
+    if(cy < h - 1) push(cur + w);
+  }
+  return alpha;
+};
+Core.featherAlpha = function(alpha, w, h){
+  var out = new Uint8Array(alpha.length);
+  for(var y = 0; y < h; y++) for(var x = 0; x < w; x++){
+    var sum = 0, n = 0;
+    for(var dy = -1; dy <= 1; dy++) for(var dx = -1; dx <= 1; dx++){
+      var xx = x + dx, yy = y + dy;
+      if(xx >= 0 && xx < w && yy >= 0 && yy < h){ sum += alpha[yy*w + xx]; n++; }
+    }
+    out[y*w + x] = Math.round(sum / n);
+  }
+  return out;
+};
+/* Composite RGBA pixel data over a solid colour using an alpha mask. */
+Core.compositeOver = function(data, alpha, rgb){
+  var out = new Uint8ClampedArray(data.length);
+  for(var p = 0, i = 0; i < data.length; i += 4, p++){
+    var a = alpha[p] / 255;
+    out[i]   = Math.round(data[i]   * a + rgb[0] * (1 - a));
+    out[i+1] = Math.round(data[i+1] * a + rgb[1] * (1 - a));
+    out[i+2] = Math.round(data[i+2] * a + rgb[2] * (1 - a));
+    out[i+3] = 255;
+  }
+  return out;
+};
+
+root.ImgCore = Core;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>
+(function(){
+'use strict';
+var Core = window.ImgCore;
+function $(id){ return document.getElementById(id); }
+function makeCanvas(w, h){ var c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; }
+function canvasBlob(canvas, mime, q){ return new Promise(function(res){ canvas.toBlob(res, mime, q); }); }
+function loadImage(url){
+  return new Promise(function(resolve, reject){
+    var img = new Image();
+    var timer = setTimeout(function(){ reject(new Error('That photo took too long to open.')); }, 25000);
+    img.onload = function(){ clearTimeout(timer); resolve(img); };
+    img.onerror = function(){ clearTimeout(timer); reject(new Error('That photo could not be opened.')); };
+    img.src = url;
+  });
+}
+function setStatus(id, html){ var el = $(id); if (el) el.innerHTML = html || ''; }
+function setError(id, msg){ var el = $(id); if (el){ el.textContent = msg || ''; el.style.display = msg ? 'block' : 'none'; } }
+function hexToRgb(hex){
+  var m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return [255,255,255];
+  var n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/* App-shell save/gate helpers — same pattern as the other tool pages. */
+var __ltqrGateWin = null;
+function ltqrGate(toolId){
+  try {
+    if (window.AppGate && typeof window.AppGate.tryUse === 'function'){
+      var now = Date.now();
+      if (!__ltqrGateWin || __ltqrGateWin.tool !== toolId || now - __ltqrGateWin.t > 8000){
+        __ltqrGateWin = { tool: toolId, t: now, ok: window.AppGate.tryUse(toolId, toolId + '-' + now) !== 'BLOCKED' };
+      }
+      return __ltqrGateWin.ok;
+    }
+  } catch(e){}
+  return true;
+}
+function ltqrSave(blob, filename, statusId){
+  var autoOpen = !!window.__ltqrAutoOpenNext;
+  window.__ltqrAutoOpenNext = false;
+  var r = new FileReader();
+  r.onload = function(){
+    var loc = null;
+    try { loc = window.AndroidSave.saveFile(r.result, filename); } catch(e){}
+    if (loc) {
+      ltqrShowOpen(loc, statusId);
+      if (autoOpen) { try { window.AndroidSave.openFile(loc); } catch(e){} }
+    }
+  };
+  try { r.readAsDataURL(blob); } catch(e){}
+}
+function ltqrShowOpen(loc, statusId){
+  var st = $(statusId); if (!st) return;
+  var olds = st.querySelectorAll('.openbtn');
+  for (var i = 0; i < olds.length; i++) olds[i].remove();
+  var b = document.createElement('button');
+  b.type = 'button'; b.className = 'openbtn'; b.textContent = 'Open';
+  b.style.cssText = 'margin-left:10px;padding:6px 18px;border:none;border-radius:8px;background:#3B82F6;color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;vertical-align:middle';
+  b.onclick = function(){ try { window.AndroidSave.openFile(loc); } catch(e){} };
+  st.appendChild(b);
+}
+function downloadBlob(blob, filename, statusId){
+  if (window.AndroidSave && typeof window.AndroidSave.saveFile === 'function'){ ltqrSave(blob, filename, statusId); return; }
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+}
+
+/* ---------- saved sheets (same IndexedDB as the old passport section,
+   so sheets users already saved carry over) ---------- */
+var mem = {}, dbp = null;
+function idb(){
+  if (dbp) return dbp;
+  dbp = new Promise(function(resolve){
+    try {
+      var req = indexedDB.open('ltqr-passport', 1);
+      req.onupgradeneeded = function(){
+        if (!req.result.objectStoreNames.contains('sheets')) req.result.createObjectStore('sheets', { keyPath: 'id' });
+      };
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ resolve(null); };
+    } catch(e){ resolve(null); }
+  });
+  return dbp;
+}
+function tx(mode, fn){
+  return idb().then(function(d){
+    if (!d) return fn(null, function(){});
+    return new Promise(function(resolve, reject){
+      var t = d.transaction('sheets', mode), out;
+      fn(t.objectStore('sheets'), function(v){ out = v; });
+      t.oncomplete = function(){ resolve(out); };
+      t.onerror = function(){ reject(t.error); };
+    });
+  }).catch(function(){ return fn(null, function(){}); });
+}
+var SheetStore = {
+  all: function(){
+    return tx('readonly', function(os, done){
+      if (!os) { done(Object.keys(mem).map(function(k){ return mem[k]; })); return; }
+      var r = os.getAll(); r.onsuccess = function(){ done(r.result || []); };
+    });
+  },
+  put: function(rec){
+    mem[rec.id] = rec;
+    return tx('readwrite', function(os, done){ if (os) os.put(rec); done(true); });
+  },
+  del: function(id){
+    delete mem[id];
+    return tx('readwrite', function(os, done){ if (os) os.delete(id); done(true); });
+  }
+};
+
+/* ---------- cropper (same engine as Image Tools) ---------- */
+function Cropper(imgEl, boxEl, natW, natH){
+  this.imgEl = imgEl; this.boxEl = boxEl;
+  this.natW = natW; this.natH = natH;
+  this.aspect = 0;
+  var w = Math.round(natW * 0.8), h = Math.round(natH * 0.8);
+  this.box = { x: Math.round((natW - w) / 2), y: Math.round((natH - h) / 2), w: w, h: h };
+  this._wire();
+  this.render();
+}
+Cropper.prototype.setAspect = function(a){
+  this.aspect = a || 0;
+  if (this.aspect) this.box = Core.cropAspect(this.box, this.aspect, this.natW, this.natH);
+  this.box = Core.cropClamp(this.box, this.natW, this.natH);
+  this.render();
+};
+Cropper.prototype.reset = function(natW, natH){
+  this.natW = natW; this.natH = natH;
+  var w = Math.round(natW * 0.8), h = Math.round(natH * 0.8);
+  this.box = { x: Math.round((natW - w) / 2), y: Math.round((natH - h) / 2), w: w, h: h };
+  if (this.aspect) this.box = Core.cropAspect(this.box, this.aspect, this.natW, this.natH);
+  this.render();
+};
+Cropper.prototype.render = function(){
+  var b = this.box, W = this.natW, H = this.natH;
+  this.boxEl.style.left = (b.x / W * 100) + '%';
+  this.boxEl.style.top = (b.y / H * 100) + '%';
+  this.boxEl.style.width = (b.w / W * 100) + '%';
+  this.boxEl.style.height = (b.h / H * 100) + '%';
+};
+Cropper.prototype._wire = function(){
+  var self = this, drag = null;
+  function pos(e){
+    var r = self.imgEl.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width * self.natW, y: (e.clientY - r.top) / r.height * self.natH };
+  }
+  function start(e, mode){
+    e.preventDefault();
+    var p = pos(e);
+    drag = { mode: mode, sx: p.x, sy: p.y, box: { x: self.box.x, y: self.box.y, w: self.box.w, h: self.box.h } };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', end, { once: true });
+  }
+  function move(e){
+    if (!drag) return;
+    var p = pos(e), dx = p.x - drag.sx, dy = p.y - drag.sy, b = drag.box, nb;
+    if (drag.mode === 'move'){
+      nb = { x: b.x + dx, y: b.y + dy, w: b.w, h: b.h };
+    } else {
+      var x1 = b.x, y1 = b.y, x2 = b.x + b.w, y2 = b.y + b.h;
+      if (drag.mode.indexOf('e') >= 0) x2 += dx;
+      if (drag.mode.indexOf('s') >= 0) y2 += dy;
+      if (drag.mode.indexOf('w') >= 0) x1 += dx;
+      if (drag.mode.indexOf('n') >= 0) y1 += dy;
+      if (self.aspect){
+        var wNew = Math.abs(x2 - x1), hNew = wNew / self.aspect;
+        if (drag.mode.indexOf('n') >= 0) y1 = y2 - hNew; else y2 = y1 + hNew;
+      }
+      nb = { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) };
+    }
+    self.box = Core.cropClamp(nb, self.natW, self.natH);
+    self.render();
+  }
+  function end(){
+    document.removeEventListener('pointermove', move); drag = null;
+    if (typeof self.onchange === 'function') self.onchange();
+  }
+  this.boxEl.addEventListener('pointerdown', function(e){
+    if (e.target.classList.contains('hd')) return;
+    start(e, 'move');
+  });
+  this.boxEl.querySelectorAll('.hd').forEach(function(hEl){
+    hEl.addEventListener('pointerdown', function(e){
+      e.stopPropagation();
+      start(e, hEl.classList.contains('nw') ? 'nw' : hEl.classList.contains('ne') ? 'ne' :
+               hEl.classList.contains('sw') ? 'sw' : 'se');
+    });
+  });
+};
+function cropCanvas(img, box){
+  var c = makeCanvas(box.w, box.h);
+  c.getContext('2d').drawImage(img, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
+  return c;
+}
+
+/* ---------- data: specs, papers, dresses ---------- */
+var SPECS = [
+  { id: 'in', name: 'India 35×45', w: 35, h: 45 },
+  { id: 'us', name: 'US 2×2 inch', w: 51, h: 51 },
+  { id: 'eu', name: 'UK / EU 35×45', w: 35, h: 45 },
+  { id: 'ca', name: 'Canada 50×70', w: 50, h: 70 },
+  { id: 'cn', name: 'China 33×48', w: 33, h: 48 },
+  { id: 'custom', name: 'Custom', w: 35, h: 45 }
+];
+var PAPERS = [
+  { id: 'a4', name: 'A4', w: 210, h: 297 },
+  { id: '4x6', name: '4×6 inch', w: 101.6, h: 152.4 },
+  { id: '5x7', name: '5×7 inch', w: 127, h: 177.8 },
+  { id: 'letter', name: 'Letter', w: 215.9, h: 279.4 },
+  { id: 'single', name: 'Individual', w: 0, h: 0 },
+  { id: 'custompaper', name: 'Custom…', w: 210, h: 297 }
+];
+function dressSvg(body, collar, inner){
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 150">'
+    + '<path d="M62 14 Q100 34 138 14 L186 44 L200 150 L0 150 L14 44 Z" fill="' + body + '"/>'
+    + (inner || '')
+    + '<path d="M62 14 Q100 34 138 14 L132 4 Q100 20 68 4 Z" fill="' + collar + '"/>'
+    + '</svg>';
+}
+var DRESSES = {
+  men: [
+    { id: 'men-suit', name: 'Suit + Tie', svg: dressSvg('#1F2A44', '#16203A',
+        '<path d="M78 22 L100 96 L122 22 L112 16 L100 30 L88 16 Z" fill="#F5F5F5"/>'
+      + '<path d="M97 30 L103 30 L102 62 L100 70 L98 62 Z" fill="#B91C1C"/>'
+      + '<path d="M78 22 L100 96 L92 150 L70 150 Z" fill="#26355A"/><path d="M122 22 L100 96 L108 150 L130 150 Z" fill="#26355A"/>') },
+    { id: 'men-shirt', name: 'Formal Shirt', svg: dressSvg('#7FB2E5', '#5B93D6',
+        '<path d="M96 34 L104 34 L104 150 L96 150 Z" fill="#6AA0DC"/>'
+      + '<circle cx="100" cy="52" r="3" fill="#EAF2FD"/><circle cx="100" cy="76" r="3" fill="#EAF2FD"/><circle cx="100" cy="100" r="3" fill="#EAF2FD"/>'
+      + '<path d="M62 14 L84 30 L100 20 L116 30 L138 14 L128 2 L100 12 L72 2 Z" fill="#5B93D6"/>') },
+    { id: 'men-blazer', name: 'Blazer', svg: dressSvg('#3A3F4A', '#2C3038',
+        '<path d="M78 22 L100 84 L122 22 L112 16 L100 28 L88 16 Z" fill="#9AA3B2"/>'
+      + '<path d="M78 22 L100 84 L92 150 L70 150 Z" fill="#454B58"/><path d="M122 22 L100 84 L108 150 L130 150 Z" fill="#454B58"/>') }
+  ],
+  women: [
+    { id: 'women-blouse', name: 'Saree Blouse', svg: dressSvg('#7C2D4E', '#5E2140',
+        '<path d="M40 40 Q100 66 160 40 L160 56 Q100 82 40 56 Z" fill="#D4A017"/>'
+      + '<path d="M62 14 Q100 34 138 14 L134 6 Q100 22 66 6 Z" fill="#D4A017"/>') },
+    { id: 'women-shirt', name: 'Formal Shirt', svg: dressSvg('#E8A2C0', '#D67FA6',
+        '<path d="M96 34 L104 34 L104 150 L96 150 Z" fill="#DE8FB4"/>'
+      + '<circle cx="100" cy="54" r="3" fill="#FFF"/><circle cx="100" cy="78" r="3" fill="#FFF"/><circle cx="100" cy="102" r="3" fill="#FFF"/>'
+      + '<path d="M62 14 L84 30 L100 20 L116 30 L138 14 L128 2 L100 12 L72 2 Z" fill="#D67FA6"/>') },
+    { id: 'women-kurta', name: 'Kurta', svg: dressSvg('#0E7490', '#155E75',
+        '<path d="M92 20 Q100 30 108 20 L106 60 Q100 66 94 60 Z" fill="#F59E0B"/>'
+      + '<path d="M30 120 L170 120 L170 132 L30 132 Z" fill="#155E75"/>') }
+  ],
+  children: [
+    { id: 'child-shirt', name: 'Shirt', svg: dressSvg('#F5C04E', '#E0A92E',
+        '<path d="M62 14 L84 30 L100 20 L116 30 L138 14 L128 2 L100 12 L72 2 Z" fill="#E0A92E"/>'
+      + '<path d="M96 40 L104 40 L104 150 L96 150 Z" fill="#E8B33C"/><circle cx="100" cy="58" r="3" fill="#7A4D00"/><circle cx="100" cy="82" r="3" fill="#7A4D00"/>') },
+    { id: 'child-tee', name: 'T-Shirt', svg: dressSvg('#38BDF8', '#1D9BD1',
+        '<path d="M0 84 L200 84 L200 102 L0 102 Z" fill="#FFFFFF" opacity="0.55"/>'
+      + '<path d="M70 8 Q100 26 130 8 L126 2 Q100 14 74 2 Z" fill="#1D9BD1"/>') },
+    { id: 'child-uniform', name: 'Uniform', svg: dressSvg('#FFFFFF', '#D8DEE9',
+        '<path d="M96 34 L104 34 L104 150 L96 150 Z" fill="#EDF1F7"/>'
+      + '<path d="M97 30 L103 30 L102 56 L100 62 L98 56 Z" fill="#2563EB"/>'
+      + '<path d="M62 14 L84 30 L100 20 L116 30 L138 14 L128 2 L100 12 L72 2 Z" fill="#D8DEE9"/>') }
+  ]
+};
+
+/* ---------- state ---------- */
+var S = {
+  fmt: 'jpg', hdBusy: false,
+  img: null, cropper: null,
+  spec: SPECS[0], paper: PAPERS[1], orient: 'portrait',
+  cutout: null, bgMode: 'keep', bgColor: '#FFFFFF', pendingColor: null,
+  dress: null, dressCat: 'men', dressSize: 100, dressY: 60,
+  credits: null, hdCost: 10, lastSheet: null
+};
+var dressImgCache = {};
+
+function showScreen(name){
+  ['home', 'editor', 'sheet', 'ready'].forEach(function(n){
+    $('scr-' + n).classList.toggle('on', n === name);
+  });
+  document.querySelectorAll('#pp-steps span').forEach(function(sp){
+    sp.classList.toggle('on', sp.getAttribute('data-step') === name);
+  });
+  window.scrollTo(0, 0);
+  if (name === 'home') renderSaved();
+  if (name === 'ready') refreshCredits();
+}
+
+/* ---------- photo pipeline ---------- */
+function specPx(dpi){ return { w: Core.mmToPx(S.spec.w, dpi), h: Core.mmToPx(S.spec.h, dpi) }; }
+function specInfo(){
+  var p300 = specPx(300);
+  $('pp-spec-info').textContent = S.spec.name + ' — ' + S.spec.w + ' × ' + S.spec.h + ' mm'
+    + ' · at print quality (300 DPI) = ' + p300.w + ' × ' + p300.h + ' px';
+}
+function buildPhoto(dpi){
+  var px = specPx(dpi);
+  var out = makeCanvas(px.w, px.h), ctx = out.getContext('2d');
+  ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, px.w, px.h);
+  var src = S.cutout || cropCanvas(S.img, S.cropper.box);
+  if (S.cutout && S.bgMode === 'color'){ ctx.fillStyle = S.bgColor; ctx.fillRect(0, 0, px.w, px.h); }
+  var cf = Core.coverFit(src.width, src.height, px.w, px.h);
+  ctx.drawImage(src, cf.sx, cf.sy, cf.sw, cf.sh, 0, 0, px.w, px.h);
+  if (S.dress) drawDress(ctx, px.w, px.h);
+  return out;
+}
+function drawDress(ctx, cellW, cellH){
+  var img = dressImgCache[S.dress.id];
+  if (!img || !img.complete || !img.naturalWidth) return;
+  var dw = cellW * (S.dressSize / 100) * 1.08;
+  var dh = dw * (img.naturalHeight / img.naturalWidth);
+  var dx = (cellW - dw) / 2;
+  var dy = cellH * (S.dressY / 100) - dh * 0.10;
+  var layer = makeCanvas(cellW, cellH), lx = layer.getContext('2d');
+  lx.drawImage(img, dx, dy, dw, dh);
+  /* soft neck blend: fade the top of the outfit so it melts under the chin */
+  var fadeH = Math.max(4, dh * 0.16);
+  var grad = lx.createLinearGradient(0, dy, 0, dy + fadeH);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,1)');
+  lx.globalCompositeOperation = 'destination-out';
+  lx.fillStyle = grad;
+  lx.fillRect(dx, dy, dw, fadeH);
+  lx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(layer, 0, 0);
+}
+function updatePreview(){
+  if (!S.img || !S.cropper) return;
+  var photo = buildPhoto(150);
+  var pv = $('pp-preview');
+  pv.width = photo.width; pv.height = photo.height;
+  pv.getContext('2d').drawImage(photo, 0, 0);
+}
+
+/* ---------- background removal ---------- */
+var bgBusy = false;
+function setCutout(canvas, how){
+  S.cutout = canvas;
+  if (S.pendingColor){ S.bgMode = 'color'; S.bgColor = S.pendingColor; S.pendingColor = null; markSwatches(); }
+  else if (S.bgMode === 'keep'){ S.bgMode = 'color'; markSwatches(); }
+  setStatus('ed-status', '✅ Background removed (' + how + '). Pick a colour, or keep editing.');
+  updatePreview();
+}
+function floodRemove(srcCanvas){
+  var w = srcCanvas.width, h = srcCanvas.height;
+  var ctx = srcCanvas.getContext('2d');
+  var id = ctx.getImageData(0, 0, w, h);
+  var tol = parseInt($('pp-tol').value, 10) || 32;
+  var alpha = Core.featherAlpha(Core.floodAlpha(id.data, w, h, tol), w, h);
+  for (var p = 0, i = 3; p < alpha.length; p++, i += 4) id.data[i] = alpha[p];
+  var out = makeCanvas(w, h);
+  out.getContext('2d').putImageData(id, 0, 0);
+  return out;
+}
+function removeBg(){
+  if (!S.img || bgBusy) return;
+  bgBusy = true;
+  setError('ed-error', '');
+  setStatus('ed-status', '<span class="spin"></span> Removing background…');
+  var src = cropCanvas(S.img, S.cropper.box);
+  var done = function(){ bgBusy = false; };
+  if (window.AppGate && typeof window.AppGate.removeBg === 'function'){
+    var send = src;
+    if (Math.max(src.width, src.height) > 1024){
+      var s = 1024 / Math.max(src.width, src.height);
+      send = makeCanvas(Math.round(src.width * s), Math.round(src.height * s));
+      send.getContext('2d').drawImage(src, 0, 0, send.width, send.height);
+    }
+    var answered = false;
+    window.__ltqrBgResult = function(res){
+      if (answered) return; answered = true;
+      if (res && res.ok && res.png){
+        loadImage('data:image/png;base64,' + res.png).then(function(img){
+          var c = makeCanvas(img.naturalWidth, img.naturalHeight);
+          c.getContext('2d').drawImage(img, 0, 0);
+          setCutout(c, 'AI'); done();
+        }).catch(function(){ setCutout(floodRemove(src), 'automatic'); done(); });
+      } else {
+        setCutout(floodRemove(src), 'automatic'); done();
+      }
+    };
+    try {
+      window.AppGate.removeBg(send.toDataURL('image/jpeg', 0.92).split(',')[1]);
+    } catch(e){
+      if (!answered){ answered = true; setCutout(floodRemove(src), 'automatic'); done(); }
+    }
+    setTimeout(function(){
+      if (!answered){ answered = true; setCutout(floodRemove(src), 'automatic'); done(); }
+    }, 60000);
+  } else {
+    setTimeout(function(){ setCutout(floodRemove(src), 'automatic'); done(); }, 30);
+  }
+}
+
+/* ---------- sheet ---------- */
+function copiesVal(){
+  var v = $('pp-copies').value;
+  if (v === 'custom') return Math.max(1, Math.min(60, parseInt($('pp-copies-n').value, 10) || 8));
+  return parseInt(v, 10) || 8;
+}
+function renderSheet(dpi){
+  var photo = buildPhoto(dpi);
+  if (S.paper.id === 'single') return { canvas: photo, layout: null };
+  var layout = Core.passportLayout({
+    dpi: dpi, sheetWmm: S.paper.w, sheetHmm: S.paper.h,
+    copies: copiesVal(), orientation: S.orient,
+    photoWmm: S.spec.w, photoHmm: S.spec.h
+  });
+  var sheet = makeCanvas(layout.sheetW, layout.sheetH), sx = sheet.getContext('2d');
+  sx.fillStyle = '#FFFFFF'; sx.fillRect(0, 0, layout.sheetW, layout.sheetH);
+  layout.cells.forEach(function(cell){
+    Core.drawSheetPhoto(sx, photo, cell);
+    if ($('pp-border').value === '1'){
+      sx.strokeStyle = '#C8CDD4'; sx.lineWidth = Math.max(1, Math.round(dpi / 150));
+      sx.strokeRect(cell.x + 0.5, cell.y + 0.5, cell.w - 1, cell.h - 1);
+    }
+  });
+  return { canvas: sheet, layout: layout };
+}
+function renderSheetPreview(){
+  if (!S.img) return;
+  var r = renderSheet(150);
+  var pv = $('pp-sheet-preview');
+  pv.width = r.canvas.width; pv.height = r.canvas.height;
+  pv.getContext('2d').drawImage(r.canvas, 0, 0);
+  var info;
+  if (S.paper.id === 'single'){
+    info = 'One individual photo — ' + S.spec.w + '×' + S.spec.h + ' mm, upright.';
+  } else {
+    info = copiesVal() + ' photos · ' + S.paper.name + ' · paper ' + S.orient
+      + ' · every photo stays upright at ' + S.spec.w + '×' + S.spec.h + ' mm';
+    if (r.layout && r.layout.shrunk) info += ' · sheet is full, so photos print slightly smaller to fit all copies';
+  }
+  $('pp-sheet-info').textContent = info;
+}
+
+/* ---------- credits / downloads ---------- */
+function refreshCredits(){
+  if (window.AppGate && typeof window.AppGate.getCredits === 'function'){
+    window.__ltqrWallet = function(w){
+      if (w && w.ok){
+        S.credits = w.credits; S.hdCost = w.hdCost || 10;
+        $('pp-credits-line').textContent = 'Your credits: ' + S.credits + ' 🪙 · HD costs ' + S.hdCost + ' credits';
+        $('pp-hd-cost').textContent = '🪙 ' + S.hdCost;
+      } else {
+        $('pp-credits-line').textContent = 'Login in the app to use credits for HD.';
+      }
+    };
+    try { window.AppGate.getCredits(); } catch(e){}
+  }
+}
+function saveSheetRecord(blob, hd){
+  var rec = {
+    id: 'sheet-' + Date.now(),
+    name: (S.paper.id === 'single' ? 'passport-photo' : 'passport-sheet') + (hd ? '-hd' : '') + '.' + (S.fmt === 'png' ? 'png' : 'jpg'),
+    copies: S.paper.id === 'single' ? 1 : copiesVal(),
+    createdAt: Date.now(),
+    blob: blob
+  };
+  SheetStore.put(rec);
+}
+async function downloadSheet(hd, preRendered){
+  setError('ready-error', '');
+  var dpi = hd ? 300 : 150;
+  setStatus('ready-status', '<span class="spin"></span> Making your ' + (hd ? 'HD' : 'Normal') + ' sheet…');
+  try {
+    var r = preRendered || renderSheet(dpi);
+    var mime = S.fmt === 'png' ? 'image/png' : 'image/jpeg';
+    var blob = await canvasBlob(r.canvas, mime, 0.92);
+    if (!blob) throw new Error('Could not make the file. Please try again.');
+    window.__ltqrAutoOpenNext = true;
+    downloadBlob(blob, (S.paper.id === 'single' ? 'passport-photo' : 'passport-sheet')
+      + (hd ? '-hd' : '') + '.' + (S.fmt === 'png' ? 'png' : 'jpg'), 'ready-status');
+    saveSheetRecord(blob, hd);
+    setStatus('ready-status', '✅ Saved. Your sheet was also kept in “My saved sheets”.');
+  } catch(e){
+    setError('ready-error', e.message || 'Something went wrong.');
+    setStatus('ready-status', '');
+  }
+}
+
+/* ---------- saved list ---------- */
+async function renderSaved(){
+  var box = $('pp-saved');
+  var all = [];
+  try { all = await SheetStore.all(); } catch(e){}
+  all.sort(function(a, b){ return (b.createdAt || 0) - (a.createdAt || 0); });
+  if (!all.length){ box.innerHTML = '<p class="hint">No saved sheets yet.</p>'; return; }
+  box.innerHTML = '';
+  all.forEach(function(rec){
+    var row = document.createElement('div');
+    row.className = 'sheetrow';
+    var d = rec.createdAt ? new Date(rec.createdAt) : null;
+    row.innerHTML = '<div class="nm"></div>';
+    row.querySelector('.nm').innerHTML = '';
+    var nm = document.createElement('div');
+    nm.textContent = rec.name || 'passport-sheet.jpg';
+    var dt = document.createElement('div');
+    dt.className = 'dt';
+    dt.textContent = (rec.copies || 1) + ' photo(s)' + (d ? ' · ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '');
+    row.querySelector('.nm').appendChild(nm); row.querySelector('.nm').appendChild(dt);
+    var dl = document.createElement('button');
+    dl.className = 'mini'; dl.textContent = '⬇ Download';
+    dl.addEventListener('click', function(){
+      window.__ltqrAutoOpenNext = true;
+      downloadBlob(rec.blob, rec.name || 'passport-sheet.jpg', 'home-error');
+    });
+    var del = document.createElement('button');
+    del.className = 'mini'; del.textContent = '🗑';
+    del.addEventListener('click', async function(){ await SheetStore.del(rec.id); renderSaved(); });
+    row.appendChild(dl); row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+
+/* ---------- wiring ---------- */
+function markChips(container, attr, val){
+  container.querySelectorAll('.chip').forEach(function(c){
+    c.classList.toggle('on', c.getAttribute(attr) === String(val));
+  });
+}
+function buildSpecChips(){
+  var box = $('pp-specs'); box.innerHTML = '';
+  SPECS.forEach(function(sp){
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip' + (S.spec.id === sp.id ? ' on' : '');
+    b.textContent = sp.name; b.setAttribute('data-id', sp.id);
+    b.addEventListener('click', function(){
+      S.spec = sp;
+      $('pp-custom').style.display = sp.id === 'custom' ? '' : 'none';
+      if (sp.id === 'custom'){
+        $('pp-cw').value = S.spec.w; $('pp-ch').value = S.spec.h;
+      }
+      buildSpecChips(); specInfo();
+      if (S.cropper) { S.cropper.setAspect(S.spec.w / S.spec.h); updatePreview(); }
+    });
+    box.appendChild(b);
+  });
+}
+function buildPaperChips(){
+  var box = $('pp-papers'); box.innerHTML = '';
+  PAPERS.forEach(function(p){
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip' + (S.paper.id === p.id ? ' on' : '');
+    b.textContent = p.name; b.setAttribute('data-id', p.id);
+    b.addEventListener('click', function(){
+      S.paper = p;
+      $('pp-orient-row').style.display = p.id === 'single' ? 'none' : '';
+      $('pp-paper-custom').style.display = p.id === 'custompaper' ? '' : 'none';
+      buildPaperChips(); renderSheetPreview();
+    });
+    box.appendChild(b);
+  });
+}
+var SWATCHES = [
+  { c: '#FFFFFF', n: 'White' }, { c: '#D6EBFF', n: 'Light Blue' }, { c: '#438EDB', n: 'Blue' },
+  { c: '#D32F2F', n: 'Red' }, { c: '#9AA0A6', n: 'Grey' }, { c: '#F8C8DC', n: 'Pink' }, { c: '#000000', n: 'Black' }
+];
+function markSwatches(){
+  document.querySelectorAll('#pp-swatches .sw').forEach(function(el){
+    var c = el.getAttribute('data-c');
+    el.classList.toggle('on', c === 'keep' ? S.bgMode === 'keep' : (S.bgMode === 'color' && S.bgColor.toUpperCase() === c.toUpperCase()));
+  });
+}
+function buildSwatches(){
+  var box = $('pp-swatches'); box.innerHTML = '';
+  var keep = document.createElement('button');
+  keep.type = 'button'; keep.className = 'sw keep'; keep.textContent = 'Original'; keep.setAttribute('data-c', 'keep');
+  keep.addEventListener('click', function(){ S.bgMode = 'keep'; markSwatches(); updatePreview(); });
+  box.appendChild(keep);
+  SWATCHES.forEach(function(s){
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'sw'; b.title = s.n;
+    b.style.background = s.c; b.setAttribute('data-c', s.c);
+    b.addEventListener('click', function(){
+      if (!S.cutout){ S.pendingColor = s.c; removeBg(); markSwatches(); return; }
+      S.bgMode = 'color'; S.bgColor = s.c; markSwatches(); updatePreview();
+    });
+    box.appendChild(b);
+  });
+  markSwatches();
+}
+function buildDresses(){
+  var box = $('pp-dresses'); box.innerHTML = '';
+  var none = document.createElement('div');
+  none.className = 'dress' + (!S.dress ? ' on' : '');
+  none.innerHTML = '<div style="height:64px;display:flex;align-items:center;justify-content:center;font-size:26px">🚫</div><span>Original</span>';
+  none.addEventListener('click', function(){ S.dress = null; buildDresses(); updatePreview(); });
+  box.appendChild(none);
+  DRESSES[S.dressCat].forEach(function(d){
+    var el = document.createElement('div');
+    el.className = 'dress' + (S.dress && S.dress.id === d.id ? ' on' : '');
+    el.innerHTML = d.svg + '<span></span>';
+    el.querySelector('span').textContent = d.name;
+    el.addEventListener('click', function(){
+      S.dress = d;
+      if (!dressImgCache[d.id]){
+        var img = new Image();
+        img.onload = function(){ updatePreview(); };
+        img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(d.svg);
+        dressImgCache[d.id] = img;
+      }
+      buildDresses(); updatePreview();
+    });
+    box.appendChild(el);
+  });
+}
+function setImage(img){
+  S.img = img; S.cutout = null; S.bgMode = 'keep'; markSwatches();
+  var el = $('pp-img');
+  el.src = img.src;
+  $('pp-stage').style.display = 'block';
+  if (!S.cropper){
+    S.cropper = new Cropper(el, $('pp-box'), img.naturalWidth, img.naturalHeight);
+    S.cropper.onchange = function(){ updatePreview(); };
+  } else {
+    S.cropper.reset(img.naturalWidth, img.naturalHeight);
+  }
+  S.cropper.setAspect(S.spec.w / S.spec.h);
+  showScreen('editor');
+  updatePreview();
+}
+
+document.querySelectorAll('.tab').forEach(function(t){
+  t.addEventListener('click', function(){
+    document.querySelectorAll('.tab').forEach(function(x){ x.classList.toggle('on', x === t); });
+    document.querySelectorAll('.tabpage').forEach(function(p){ p.classList.toggle('on', p.id === 'tab-' + t.getAttribute('data-tab')); });
+  });
+});
+$('pp-new').addEventListener('click', function(){ $('pp-file').click(); });
+$('pp-change').addEventListener('click', function(){ $('pp-file').click(); });
+async function openPhotoFile(f){
+  if (!f) return;
+  setError('home-error', '');
+  try {
+    if (!/^image\//.test(f.type || '')) throw new Error('That is not a photo. Please choose a JPG or PNG photo.');
+    var img = await loadImage(URL.createObjectURL(f));
+    setImage(img);
+  } catch(e){ setError('home-error', e.message || 'Could not open that photo.'); }
+}
+$('pp-file').addEventListener('change', function(){
+  var f = this.files && this.files[0];
+  this.value = '';
+  openPhotoFile(f);
+});
+/* Drag-and-drop + paste upload (website + app WebView where allowed). */
+(function(){
+  var dz = $('pp-dropzone');
+  if (dz){
+    ['dragover','dragenter'].forEach(function(ev){ dz.addEventListener(ev, function(e){ e.preventDefault(); dz.style.outline = '2px dashed #3B82F6'; }); });
+    ['dragleave','drop'].forEach(function(ev){ dz.addEventListener(ev, function(e){ e.preventDefault(); dz.style.outline = ''; }); });
+    dz.addEventListener('drop', function(e){
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      openPhotoFile(f);
+    });
+  }
+  document.addEventListener('paste', function(e){
+    var items = (e.clipboardData && e.clipboardData.items) || [];
+    for (var i = 0; i < items.length; i++){
+      if (/^image\//.test(items[i].type || '')){ openPhotoFile(items[i].getAsFile()); e.preventDefault(); return; }
+    }
+  });
+  $('pp-sample').addEventListener('click', async function(){
+    setError('home-error', '');
+    try { var img = await loadImage('sample-portrait.jpg'); setImage(img); }
+    catch(e){ setError('home-error', 'Sample photo load nahi hua — apni photo choose karo.'); }
+  });
+})();
+$('pp-cw').addEventListener('change', function(){
+  if (S.spec.id !== 'custom') return;
+  S.spec.w = Math.max(10, Math.min(200, parseFloat(this.value) || 35));
+  specInfo(); if (S.cropper){ S.cropper.setAspect(S.spec.w / S.spec.h); updatePreview(); }
+});
+$('pp-ch').addEventListener('change', function(){
+  if (S.spec.id !== 'custom') return;
+  S.spec.h = Math.max(10, Math.min(200, parseFloat(this.value) || 45));
+  specInfo(); if (S.cropper){ S.cropper.setAspect(S.spec.w / S.spec.h); updatePreview(); }
+});
+$('pp-remove-bg').addEventListener('click', removeBg);
+$('pp-bg-custom').addEventListener('input', function(){
+  var c = this.value;
+  if (!S.cutout){ S.pendingColor = c; removeBg(); return; }
+  S.bgMode = 'color'; S.bgColor = c; markSwatches(); updatePreview();
+});
+document.querySelectorAll('#pp-dress-cats .chip').forEach(function(ch){
+  ch.addEventListener('click', function(){
+    S.dressCat = ch.getAttribute('data-cat');
+    markChips($('pp-dress-cats'), 'data-cat', S.dressCat);
+    buildDresses();
+  });
+});
+$('pp-dress-size').addEventListener('input', function(){ S.dressSize = parseInt(this.value, 10) || 100; updatePreview(); });
+$('pp-dress-y').addEventListener('input', function(){ S.dressY = parseInt(this.value, 10) || 60; updatePreview(); });
+$('pp-to-sheet').addEventListener('click', function(){
+  if (!S.img){ setError('ed-error', 'Please choose a photo first.'); return; }
+  showScreen('sheet'); renderSheetPreview();
+});
+$('pp-back-editor').addEventListener('click', function(){ showScreen('editor'); });
+document.querySelectorAll('#pp-orient .chip').forEach(function(ch){
+  ch.addEventListener('click', function(){
+    S.orient = ch.getAttribute('data-o');
+    markChips($('pp-orient'), 'data-o', S.orient);
+    renderSheetPreview();
+  });
+});
+$('pp-copies').addEventListener('change', function(){
+  $('pp-copies-custom').style.display = this.value === 'custom' ? '' : 'none';
+  renderSheetPreview();
+});
+$('pp-copies-n').addEventListener('change', renderSheetPreview);
+function customPaperSync(){
+  if (S.paper.id !== 'custompaper') return;
+  S.paper.w = Math.max(50, Math.min(500, parseFloat($('pp-papw').value) || 210));
+  S.paper.h = Math.max(50, Math.min(500, parseFloat($('pp-paph').value) || 297));
+  renderSheetPreview();
+}
+$('pp-papw').addEventListener('change', customPaperSync);
+$('pp-paph').addEventListener('change', customPaperSync);
+$('pp-border').addEventListener('change', renderSheetPreview);
+function sheetDims(dpi){
+  if (S.paper.id === 'single') return { w: Core.mmToPx(S.spec.w, dpi), h: Core.mmToPx(S.spec.h, dpi) };
+  var L = Core.passportLayout({ dpi: dpi, sheetWmm: S.paper.w, sheetHmm: S.paper.h,
+    copies: copiesVal(), orientation: S.orient, photoWmm: S.spec.w, photoHmm: S.spec.h });
+  return { w: L.sheetW, h: L.sheetH };
+}
+$('pp-make').addEventListener('click', function(){
+  var r = renderSheet(150);
+  var pv = $('pp-ready-preview');
+  pv.width = r.canvas.width; pv.height = r.canvas.height;
+  pv.getContext('2d').drawImage(r.canvas, 0, 0);
+  if (S.img){
+    var oc = $('pp-orig-preview');
+    var sc = Math.min(1, 900 / Math.max(S.img.naturalWidth, S.img.naturalHeight));
+    oc.width = Math.max(1, Math.round(S.img.naturalWidth * sc));
+    oc.height = Math.max(1, Math.round(S.img.naturalHeight * sc));
+    oc.getContext('2d').drawImage(S.img, 0, 0, oc.width, oc.height);
+  }
+  var dn = sheetDims(150), dh = sheetDims(300);
+  $('pp-ready-res').textContent = 'Normal: ' + dn.w + ' × ' + dn.h + ' px • 150 DPI · HD: ' + dh.w + ' × ' + dh.h + ' px • 300 DPI';
+  $('pp-ready-info').textContent = S.paper.id === 'single'
+    ? 'Individual photo · ' + S.spec.w + '×' + S.spec.h + ' mm · upright'
+    : copiesVal() + ' photos · ' + S.paper.name + ' paper (' + S.orient + ') · every photo upright at ' + S.spec.w + '×' + S.spec.h + ' mm';
+  showScreen('ready');
+});
+/* Ready tabs: Original vs Result */
+document.querySelectorAll('#pp-ready-tabs .chip').forEach(function(ch){
+  ch.addEventListener('click', function(){
+    var orig = ch.getAttribute('data-rt') === 'orig';
+    document.querySelectorAll('#pp-ready-tabs .chip').forEach(function(x){ x.classList.toggle('on', x === ch); });
+    $('pp-orig-wrap').style.display = orig ? '' : 'none';
+    $('pp-result-wrap').style.display = orig ? 'none' : '';
+  });
+});
+/* Format toggle JPG / PNG */
+document.querySelectorAll('#pp-fmt .chip').forEach(function(ch){
+  ch.addEventListener('click', function(){
+    S.fmt = ch.getAttribute('data-f');
+    document.querySelectorAll('#pp-fmt .chip').forEach(function(x){ x.classList.toggle('on', x === ch); });
+  });
+});
+function openPremium(){
+  if (window.AppGate && typeof window.AppGate.openPremiumScreen === 'function'){
+    try { window.AppGate.openPremiumScreen(); } catch(e){}
+  }
+}
+function showNoCredits(){
+  $('pp-nocredits-msg').textContent = 'HD download ke liye ' + S.hdCost + ' 🪙 chahiye — tumhare paas ' + (S.credits || 0) + ' 🪙 hain. Credits buy karo, ya Premium lo — har Premium plan ke saath FREE credits milte hain.';
+  $('pp-nocredits').style.display = 'flex';
+}
+$('pp-nc-buy').addEventListener('click', function(){ $('pp-nocredits').style.display = 'none'; openPremium(); });
+$('pp-nc-earn').addEventListener('click', function(){ $('pp-nocredits').style.display = 'none'; openPremium(); });
+$('pp-nc-close').addEventListener('click', function(){ $('pp-nocredits').style.display = 'none'; });
+$('pp-dl-normal').addEventListener('click', function(){
+  if (!ltqrGate('image')){
+    setError('ready-error', 'You have used all free uses for this month. Premium gives unlimited use.');
+    return;
+  }
+  downloadSheet(false);
+});
+$('pp-dl-hd').addEventListener('click', function(){
+  if (S.hdBusy) return; /* in-flight lock: credits can only go once */
+  if (window.AppGate && typeof window.AppGate.spendForHd === 'function'){
+    if (S.credits == null){
+      setError('ready-error', 'Checking your credits… tap HD again in a moment.');
+      refreshCredits();
+      return;
+    }
+    /* CREDIT SAFETY: the HD sheet is rendered FIRST; credits are
+       deducted only after the render succeeds, exactly once. */
+    var rendered;
+    try { rendered = renderSheet(300); }
+    catch(e){ setError('ready-error', 'HD sheet ban nahi paya — credits NAHI kate.'); return; }
+    if (S.credits < S.hdCost){ showNoCredits(); return; }
+    S.hdBusy = true;
+    $('pp-dl-hd').style.opacity = '0.6';
+    setStatus('ready-status', '<span class="spin"></span> Using ' + S.hdCost + ' credits…');
+    window.__ltqrSpendResult = function(res){
+      S.hdBusy = false;
+      $('pp-dl-hd').style.opacity = '';
+      if (res && res.ok){
+        S.credits = res.credits;
+        $('pp-credits-line').textContent = 'Your credits: ' + S.credits + ' 🪙 · HD costs ' + S.hdCost + ' credits';
+        downloadSheet(true, rendered);
+      } else {
+        setStatus('ready-status', '');
+        if (res && res.code === 'NO_CREDITS'){ showNoCredits(); return; }
+        setError('ready-error', (res && res.message) || 'HD payment failed. Please try again.');
+      }
+    };
+    try { window.AppGate.spendForHd(); }
+    catch(e){ S.hdBusy = false; $('pp-dl-hd').style.opacity = ''; setError('ready-error', 'HD is not available right now.'); setStatus('ready-status', ''); }
+    return;
+  }
+  /* Outside the app there is no credit wallet: keep the honest lock. */
+  if (window.AppGate && typeof window.AppGate.requirePremium === 'function'){
+    try { window.AppGate.requirePremium('passport-hd'); } catch(e){}
+  }
+  setError('ready-error', 'HD download works in the app with credits 🪙. Normal download is free.');
+});
+$('pp-buy-credits').addEventListener('click', function(){
+  if (window.AppGate && typeof window.AppGate.openPremiumScreen === 'function'){
+    try { window.AppGate.openPremiumScreen(); } catch(e){}
+  }
+});
+$('pp-again').addEventListener('click', function(){ showScreen('sheet'); renderSheetPreview(); });
+$('pp-home2').addEventListener('click', function(){ showScreen('home'); });
+
+/* feature flag: passport follows the Photo Tools flag when the admin set it */
+try {
+  if (window.AppGate && typeof window.AppGate.getAppConfig === 'function'){
+    var cfg = JSON.parse(window.AppGate.getAppConfig() || '{}');
+    if (cfg.featureFlags && cfg.featureFlags.image === false){
+      document.querySelector('main').innerHTML = '<div class="card"><h2>Passport Photo is off</h2><p class="hint">This feature is turned off right now. Please try later.</p></div>';
+    }
+  }
+} catch(e){}
+
+buildSpecChips();
+buildPaperChips();
+buildSwatches();
+buildDresses();
+specInfo();
+renderSaved();
+})();
+</script>
+
+<style>
+body{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:90;display:flex;align-items:flex-end;background:#121A28;border-top:1px solid #263449;box-shadow:0 -10px 30px rgba(0,0,0,.5);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.bnav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;color:#9CA3AF;text-decoration:none;font-size:10.5px;font-weight:600;border-radius:12px;font-family:system-ui,sans-serif}
+.bnav a .bi{font-size:21px;line-height:1.15}
+.bnav a.on{color:#3B82F6}
+.bnav a.bnav-scan .bi{display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#38BDF8,#2563EB);font-size:25px;margin-top:-27px;box-shadow:0 10px 22px rgba(37,99,235,.5);border:3px solid #0A0F18}
+.bnav a.bnav-scan.on{color:#7DD3FC}
+</style>
+<nav class="bnav" aria-label="Main">
+  <a href="/" data-nav="home"><span class="bi">🏠</span>Home</a>
+  <a href="/tools.html" data-nav="tools"><span class="bi">🧰</span>All Tools</a>
+  <a href="/tools/scanner.html" class="bnav-scan" data-nav="scan"><span class="bi">📷</span>Scan</a>
+  <a href="/#history" data-nav="history"><span class="bi">🕘</span>History</a>
+  <a href="/settings.html" data-nav="settings"><span class="bi">⚙️</span>Settings</a>
+</nav>
+<script>
+(function(){ try {
+  var path = ((window.location && location.pathname) || '').split('/').pop() || 'index.html';
+  var map = { 'index.html':'home', '':'home', 'tools.html':'tools', 'scanner.html':'scan', 'pdf-tools.html':'tools', 'image-tools.html':'tools', 'text-edit.html':'tools', 'passport.html':'tools', 'spin.html':'tools', 'wallet.html':'tools', 'bonus.html':'tools', 'tasks.html':'tools', 'settings.html':'settings' };
+  var key = map[path];
+  if (key){ var el = document.querySelector('.bnav [data-nav="' + key + '"]'); if (el) el.classList.add('on'); }
+} catch(e){} })();
+</script>
+
+<script type="module">
+/* Website credits bridge: gives this page the same AppGate surface the
+   Android app provides natively, backed by Firestore. Welcome grant
+   (+5 once), HD spend (exactly the config cost, never negative) mirror
+   CreditSync.java + CreditLogic rules. */
+import { auth, db, doc, getDoc, collection, serverTimestamp, runTransaction, onAuthStateChanged, loadConfig } from "../js/fb.js";
+let cfgCache = {};
+loadConfig().then(c => { cfgCache = c || {}; });
+function deliverWallet(w){
+  if (typeof window.__ltqrWallet === 'function') window.__ltqrWallet(w);
+  if (!w.ok) setTimeout(() => { const el = document.getElementById('pp-credits-line'); if (el) el.textContent = 'HD ke liye pehle login karo — credits tumhare account me rahte hain.'; }, 60);
+}
+async function readWallet(user){
+  const cost = Number(cfgCache.hdCreditCost) > 0 ? Number(cfgCache.hdCreditCost) : 10;
+  const userRef = doc(db, "users", user.uid);
+  const snap = await getDoc(userRef);
+  const data = snap.exists() ? snap.data() : {};
+  let credits = Number(data.credits) || 0;
+  if (snap.exists() && !data.welcomeCreditsGiven) {
+    try {
+      credits = await runTransaction(db, async (tx) => {
+        const s = await tx.get(userRef);
+        const d = s.exists() ? s.data() : {};
+        let c = Number(d.credits) || 0;
+        if (!d.welcomeCreditsGiven) { c += 5; tx.update(userRef, { credits: c, welcomeCreditsGiven: true }); }
+        return c;
+      });
+    } catch (e) { /* rules may not be updated yet — show the read balance */ }
+  }
+  deliverWallet({ ok: true, credits: credits, hdCost: cost });
+}
+window.AppGate = {
+  getCredits(){
+    const user = auth.currentUser;
+    if (!user) { deliverWallet({ ok: false, code: 'LOGIN' }); return; }
+    readWallet(user).catch(() => deliverWallet({ ok: false, code: 'ERROR' }));
+  },
+  spendForHd(){
+    const user = auth.currentUser;
+    const done = window.__ltqrSpendResult;
+    if (!user) { if (done) done({ ok: false, code: 'LOGIN', message: 'Pehle login karo.' }); return; }
+    (async () => {
+      try {
+        const userRef = doc(db, "users", user.uid);
+        const cfgRef = doc(db, "settings", "config");
+        const spendRef = doc(collection(db, "creditSpends"));
+        const left = await runTransaction(db, async (tx) => {
+          const cs = await tx.get(cfgRef);
+          const cost = cs.exists() && Number(cs.data().hdCreditCost) > 0 ? Number(cs.data().hdCreditCost) : 10;
+          const s = await tx.get(userRef);
+          const bal = s.exists() ? (Number(s.data().credits) || 0) : 0;
+          if (bal < cost) { const err = new Error('NO_CREDITS'); err.code = 'NO_CREDITS'; err.cost = cost; throw err; }
+          tx.update(userRef, { credits: bal - cost });
+          tx.set(spendRef, { uid: user.uid, amount: cost, feature: 'passport-hd', createdAt: serverTimestamp() });
+          return bal - cost;
+        });
+        if (done) done({ ok: true, credits: left });
+      } catch (e) {
+        if (done) done({ ok: false, code: (e && e.code) || 'ERROR', message: e && e.code === 'NO_CREDITS' ? 'Credits kam hain.' : 'HD payment nahi ho paya. Dobara try karo.' });
+      }
+    })();
+  },
+  openPremiumScreen(){ window.location.href = '/premium.html'; },
+  getAppConfig(){ try { return JSON.stringify({ featureFlags: (cfgCache && cfgCache.featureFlags) || {} }); } catch (e) { return '{}'; } }
+};
+onAuthStateChanged(auth, () => {});
+</script>
+</body>
+</html>

@@ -27,6 +27,12 @@
         <option value="bug">🐛 Bug Report</option>
         <option value="payment">💳 Payment Issue</option>
         <option value="refer">🎁 Refer Issue</option>
+        <option value="spin">🎡 Spin Issue</option>
+        <option value="task">✅ Task Issue</option>
+        <option value="bonus">🎟️ Bonus Code Issue</option>
+        <option value="wallet">👛 Wallet / Withdraw Issue</option>
+        <option value="credits">🪙 Credits Issue</option>
+        <option value="notification">🔔 Notification Issue</option>
         <option value="other">💬 Other</option>
       </select>
       <label class="f" for="msgInput">Your problem</label>
@@ -73,7 +79,7 @@ import {
 } from "/js/fb.js";
 
 const $ = id => document.getElementById(id);
-const CAT_LABEL = { bug: "🐛 Bug Report", payment: "💳 Payment Issue", refer: "🎁 Refer Issue", other: "💬 Other" };
+const CAT_LABEL = { bug: "🐛 Bug Report", payment: "💳 Payment Issue", refer: "🎁 Refer Issue", spin: "🎡 Spin Issue", task: "✅ Task Issue", bonus: "🎟️ Bonus Code Issue", wallet: "👛 Wallet / Withdraw Issue", credits: "🪙 Credits Issue", notification: "🔔 Notification Issue", other: "💬 Other" };
 const ST_LABEL = { open: "Open", replied: "Replied", closed: "Closed" };
 let me = null, openTicket = null, openData = null;
 

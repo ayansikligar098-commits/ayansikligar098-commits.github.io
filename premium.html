@@ -86,6 +86,31 @@
     </div>
   </div>
 
+  <!-- credits (v1.14): HD downloads wallet — packs via the same UPI/UTR flow -->
+  <div class="card hidden" id="creditsCard">
+    <h2>Credits 🪙</h2>
+    <p class="muted">Credits se Passport Photo ke <b>HD (300 DPI)</b> downloads milte hain. Premium plan lene par plan ke saath free credits bhi milte hain.</p>
+    <p style="font-size:16px;margin:10px 0 2px">Your balance: <b id="creditBalance">…</b> 🪙</p>
+    <p class="muted" id="creditCostLine">HD download cost: 10 credits</p>
+    <div class="plans" id="creditPacks"></div>
+    <div id="creditPaySection">
+      <h3>Step 1 — Pay with any UPI app</h3>
+      <div class="upi-box"><span>Pay to UPI ID:<br><b id="creditUpiText">…</b></span>
+        <span style="display:flex;gap:8px;flex-wrap:wrap">
+          <a class="btn" id="creditPayBtn" href="#">Pay in UPI app</a>
+        </span>
+      </div>
+      <p class="muted">Pack ka exact price pay karo, phir UTR number neeche bhejo. Credits admin approval ke baad milenge.</p>
+      <h3>Step 2 — Send UTR</h3>
+      <label class="f" for="creditUtr">UTR number</label>
+      <input type="text" id="creditUtr" placeholder="e.g. 402288776655" inputmode="numeric" maxlength="30">
+      <label class="f" for="creditShot">Payment screenshot (optional)</label>
+      <input type="file" id="creditShot" accept="image/*">
+      <div style="margin-top:18px"><button class="btn big" id="creditSubmit" type="button" style="width:100%;justify-content:center">Buy Credits</button></div>
+      <div class="msg" id="creditMsg"></div>
+    </div>
+  </div>
+
   <!-- my requests -->
   <div class="card hidden" id="requestsCard">
     <h2>My Requests</h2>
@@ -102,7 +127,7 @@
 import {
   auth, db, onAuthStateChanged, sendEmailVerification,
   doc, getDoc, addDoc, collection, query, where, orderBy, limit, getDocs,
-  serverTimestamp, writeBatch, loadConfig, loadProfile, planPrice, isPremium,
+  serverTimestamp, writeBatch, runTransaction, loadConfig, loadProfile, planPrice, isPremium,
   needsEmailVerify, PLAN_KEYS, PLAN_NAMES, PLAN_MONTHS, fmtDate, esc
 } from "/js/fb.js";
 
@@ -329,7 +354,8 @@ async function loadMyRequests() {
     snap.forEach(d => {
       const r = d.data();
       const st = (r.status || "pending").toLowerCase();
-      html += `<tr><td>${esc(PLAN_NAMES[r.plan] || r.plan || "")} — ₹${esc(r.amountPaid ?? "")}</td>` +
+      const label = r.type === "credits" ? ("🪙 " + (r.packCredits ?? "") + " Credits") : (PLAN_NAMES[r.plan] || r.plan || "");
+      html += `<tr><td>${esc(label)} — ₹${esc(r.amountPaid ?? "")}</td>` +
         `<td>${esc(fmtDate(r.createdAt))}</td>` +
         `<td><span class="chip ${st}">${esc(st[0].toUpperCase() + st.slice(1))}</span>` +
         (st === "rejected" && r.rejectReason ? `<div class="muted" style="margin-top:4px">Reason: ${esc(r.rejectReason)}</div>` : "") +
@@ -340,6 +366,89 @@ async function loadMyRequests() {
     box.innerHTML = '<p class="muted">Couldn\'t load your requests.</p>';
   }
 }
+
+/* ---------- credits (v1.14) ---------- */
+let selectedPack = 0;
+function creditPacks() {
+  const raw = cfg && cfg.creditPacks;
+  const list = [];
+  if (Array.isArray(raw)) raw.forEach(p => {
+    const c = Number(p && p.credits), pr = Number(p && p.price);
+    if (c > 0 && pr > 0) list.push({ credits: c, price: pr });
+  });
+  return list.length ? list : [{ credits: 50, price: 49 }, { credits: 120, price: 99 }, { credits: 300, price: 199 }];
+}
+function renderCreditPacks() {
+  const packs = creditPacks();
+  if (selectedPack >= packs.length) selectedPack = 0;
+  $("creditPacks").innerHTML = packs.map((p, i) => `
+    <div class="plan ${i === selectedPack ? "sel" : ""}" data-pack="${i}">
+      <div class="nm">${p.credits} Credits 🪙</div>
+      <div class="pr">₹${p.price}</div>
+      <div class="muted">Passport HD downloads ke liye</div>
+    </div>`).join("");
+  document.querySelectorAll("[data-pack]").forEach(el =>
+    el.addEventListener("click", () => { selectedPack = Number(el.dataset.pack); renderCreditPacks(); renderCreditPay(); }));
+  renderCreditPay();
+}
+function renderCreditPay() {
+  const packs = creditPacks();
+  const p = packs[selectedPack] || packs[0];
+  const upi = (cfg.upiId || "").trim();
+  $("creditUpiText").textContent = upi || "(not set by admin yet)";
+  $("creditPayBtn").href = upi && p
+    ? "upi://pay?pa=" + encodeURIComponent(upi) + "&pn=" + encodeURIComponent("Link To QR") + "&am=" + p.price + "&cu=INR"
+    : "#";
+  const cost = Number(cfg.hdCreditCost) > 0 ? Number(cfg.hdCreditCost) : 10;
+  $("creditCostLine").textContent = "HD download cost: " + cost + " credits";
+}
+async function renderCredits(profile) {
+  $("creditsCard").classList.remove("hidden");
+  let credits = profile ? (Number(profile.credits) || 0) : 0;
+  // Welcome grant: +5 once (same bounded transition as the app).
+  if (profile && !profile.welcomeCreditsGiven && me) {
+    try {
+      const userRef = doc(db, "users", me.uid);
+      credits = await runTransaction(db, async tx => {
+        const s = await tx.get(userRef);
+        const d = s.exists() ? s.data() : {};
+        let c = Number(d.credits) || 0;
+        if (s.exists() && !d.welcomeCreditsGiven) { c += 5; tx.update(userRef, { credits: c, welcomeCreditsGiven: true }); }
+        return c;
+      });
+    } catch (e) { /* rules may not allow it yet — show the read balance */ }
+  }
+  $("creditBalance").textContent = credits;
+  renderCreditPacks();
+}
+$("creditSubmit").addEventListener("click", async () => {
+  const m = $("creditMsg"), b = $("creditSubmit");
+  const utr = $("creditUtr").value.trim();
+  const file = $("creditShot").files[0];
+  const packs = creditPacks();
+  const p = packs[selectedPack] || packs[0];
+  if (!p) { m.textContent = "No credit pack available right now."; m.className = "msg err"; return; }
+  if (utr.length < 6) { m.textContent = "Please enter the UTR number from your payment."; m.className = "msg err"; return; }
+  if (file && !file.type.startsWith("image/")) { m.textContent = "The screenshot must be an image file."; m.className = "msg err"; return; }
+  b.disabled = true; b.textContent = "Sending request…"; m.textContent = "";
+  try {
+    const fields = {
+      uid: me.uid, email: me.email || "", name: me.displayName || "",
+      type: "credits", packCredits: p.credits, amount: p.price, amountPaid: p.price,
+      plan: "", months: 0, couponCode: "", utr: utr, status: "pending",
+      createdAt: serverTimestamp()
+    };
+    if (file) fields.screenshotB64 = await fileToScreenshotB64(file);
+    await addDoc(collection(db, "payRequests"), fields);
+    m.textContent = "Request sent ✓ Credits will be added after approval.";
+    m.className = "msg ok";
+    loadMyRequests();
+  } catch (e) {
+    m.textContent = "Could not send. Check your internet and try again.";
+    m.className = "msg err";
+  }
+  b.disabled = false; b.textContent = "Buy Credits";
+});
 
 $("gateResend").addEventListener("click", async () => {
   if (!auth.currentUser) return;
@@ -356,10 +465,10 @@ $("gateRecheck").addEventListener("click", async () => {
 onAuthStateChanged(auth, async user => {
   me = user;
   $("signedOutCard").classList.toggle("hidden", !!user);
-  if (!user) { $("buyCard").classList.add("hidden"); $("requestsCard").classList.add("hidden"); $("gateCard").classList.add("hidden"); return; }
+  if (!user) { $("buyCard").classList.add("hidden"); $("requestsCard").classList.add("hidden"); $("gateCard").classList.add("hidden"); $("creditsCard").classList.add("hidden"); return; }
   if (needsEmailVerify(user)) {
     $("gateCard").classList.remove("hidden");
-    $("buyCard").classList.add("hidden"); $("requestsCard").classList.add("hidden");
+    $("buyCard").classList.add("hidden"); $("requestsCard").classList.add("hidden"); $("creditsCard").classList.add("hidden");
     return;
   }
   $("gateCard").classList.add("hidden");
@@ -367,7 +476,7 @@ onAuthStateChanged(auth, async user => {
   const profile = await loadProfile(user.uid);
   if (profile && profile.banned === true) {
     $("bannedCard").classList.remove("hidden");
-    $("buyCard").classList.add("hidden"); $("requestsCard").classList.add("hidden");
+    $("buyCard").classList.add("hidden"); $("requestsCard").classList.add("hidden"); $("creditsCard").classList.add("hidden");
     return;
   }
   if (isPremium(profile)) {
@@ -382,7 +491,7 @@ onAuthStateChanged(auth, async user => {
   $("buyCard").classList.remove("hidden");
   showCouponNote();
   $("requestsCard").classList.remove("hidden");
-  renderPlans(); renderPrice(); loadMyRequests();
+  renderPlans(); renderPrice(); loadMyRequests(); renderCredits(profile);
 });
 </script>
 </body>

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bonus Code — Link To QR</title>
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body class="site">
+<div id="siteHeader"></div>
+
+<div class="wrap">
+  <div style="display:flex;align-items:center;gap:12px;margin:10px 0 2px">
+    <svg width="42" height="42" viewBox="0 0 100 100" aria-hidden="true">
+      <rect x="14" y="42" width="72" height="46" rx="7" fill="#10B981"/>
+      <rect x="10" y="28" width="80" height="16" rx="6" fill="#059669"/>
+      <rect x="44" y="28" width="12" height="60" fill="#FACC15"/>
+      <path d="M50 28 C38 6 14 12 22 24 C27 31 42 29 50 28 C58 29 73 31 78 24 C86 12 62 6 50 28Z" fill="#F59E0B"/>
+    </svg>
+    <div>
+      <h1 style="font-size:24px;margin:0">Bonus Code 🎁</h1>
+      <p class="muted" style="margin:0">Code dalo, paise seedha tumhare Wallet me — wahi wallet jo app me hai.</p>
+    </div>
+    <div id="walletChip" style="margin-left:auto;background:linear-gradient(135deg,#065F46,#10B981);color:#fff;border-radius:999px;padding:8px 14px;font-weight:800;font-size:14px;white-space:nowrap">Wallet ₹0</div>
+  </div>
+
+  <div class="card hidden" id="guestCard">
+    <h2>Login first</h2>
+    <p class="muted">Bonus code use karne ke liye pehle login karo.</p>
+    <a class="btn big" href="/login.html">Go to Login</a>
+  </div>
+
+  <div id="mainBox" class="hidden">
+    <div class="card hidden" id="pausedCard" style="border-color:#8A6D1F">
+      <h2>⏸ Abhi rewards band hain</h2>
+      <p class="muted">Rewards abhi kuch der ke liye band hain, jald wapas aayenge. Tab tak code sambhal ke rakho.</p>
+    </div>
+    <div class="card hidden" id="frozenCard" style="border-color:#1D4ED8">
+      <h2>❄️ Tumhara wallet freeze hai</h2>
+      <p class="muted" id="frozenReason">Freeze ke dauraan bonus nahi mil sakta.</p>
+    </div>
+    <div class="card">
+      <h2>Redeem Bonus Code</h2>
+      <p class="muted">Tumhare paas koi bonus code hai? Yahan dalo — sahi code par paise turant Wallet me aa jayenge. Ek code ek account par ek hi baar chalta hai.</p>
+      <div class="rowflex">
+        <input type="text" id="bonusCode" placeholder="BONUS CODE" style="text-transform:uppercase;letter-spacing:1px;font-weight:700" maxlength="24">
+        <button class="btn" id="redeemBtn" type="button" style="flex:0 0 auto;background:linear-gradient(135deg,#059669,#34D399);border:0">🎁 Redeem Karo</button>
+      </div>
+      <div class="msg" id="bonusMsg"></div>
+    </div>
+    <div class="card">
+      <h2>Mere Redeemed Bonus</h2>
+      <div id="bonusHistory"><p class="muted">Abhi tak koi bonus nahi liya.</p></div>
+    </div>
+    <div class="card">
+      <h2>App me aur kamao 🎡</h2>
+      <p class="muted">Spin &amp; Earn aur Tasks sirf Android app me hain — wallet ek hi hai, kamai kahin se bhi withdraw ho jayegi.</p>
+      <a class="btn big" href="https://ayansikligar098-commits.github.io/LinkToQR.apk">⬇ Download the App</a>
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <span>© Link To QR</span><a href="/privacy.html">Privacy Policy</a><a href="/terms.html">Terms &amp; Conditions</a><a href="/">Tools</a>
+</footer>
+
+<script type="module" src="/js/header.js"></script>
+<script type="module">
+import {
+  auth, db, onAuthStateChanged, doc, getDoc, getDocs, collection, query, where,
+  orderBy, limit, serverTimestamp, runTransaction, increment, loadConfig, loadProfile, esc
+} from "/js/fb.js";
+
+const $ = id => document.getElementById(id);
+let me = null, cfg = {}, profile = null, busy = false;
+
+function rupees(p) { const r = Math.floor(p / 100), x = p % 100; return "₹" + r + (x ? "." + (x < 10 ? "0" : "") + x : ""); }
+function fmtWhen(ts) {
+  if (!ts) return "";
+  const ms = typeof ts.toMillis === "function" ? ts.toMillis() : (ts.seconds ? ts.seconds * 1000 : Number(ts) || 0);
+  return ms ? new Date(ms).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+}
+function setBalance() { $("walletChip").textContent = "Wallet " + rupees(profile ? (Number(profile.walletBalancePaise) || 0) : 0); }
+
+async function loadHistory() {
+  try {
+    const q = query(collection(db, "bonusRedeems"), where("uid", "==", me.uid), orderBy("createdAt", "desc"), limit(20));
+    const snap = await getDocs(q);
+    if (snap.empty) { $("bonusHistory").innerHTML = '<p class="muted">Abhi tak koi bonus nahi liya.</p>'; return; }
+    let html = "";
+    snap.forEach(d => {
+      const r = d.data();
+      html += `<div style="display:flex;gap:10px;align-items:center;background:var(--surface2,#1A2436);border:1px solid var(--line,#263449);border-radius:12px;padding:10px 13px;margin-top:8px">
+        <span style="flex:1;font-weight:700">🎁 ${esc(r.code || "")}<div class="muted" style="font-size:12px;font-weight:500">${esc(fmtWhen(r.createdAt))}</div></span>
+        <b style="color:${r.status === "reversed" ? "#F0A6A6" : "#7BD88F"}">${r.status === "reversed" ? "↩️ reversed" : "+" + rupees(Number(r.amountPaise) || 0)}</b></div>`;
+    });
+    $("bonusHistory").innerHTML = html;
+  } catch (e) { /* history is best-effort */ }
+}
+
+$("redeemBtn").addEventListener("click", async () => {
+  const m = $("bonusMsg");
+  const code = $("bonusCode").value.trim().toUpperCase();
+  m.className = "msg";
+  if (!code) { m.textContent = "Pehle code dalo."; m.className = "msg err"; return; }
+  if (busy) return;
+  if (cfg.earnPaused === true) { m.textContent = "⏸ Abhi rewards band hain, jald wapas aayenge"; m.className = "msg err"; return; }
+  if (profile && profile.walletFrozen === true) { m.textContent = "❄️ Tumhara wallet freeze hai."; m.className = "msg err"; return; }
+  busy = true; $("redeemBtn").disabled = true; m.textContent = "Check ho raha hai…";
+  try {
+    const out = await runTransaction(db, async tx => {
+      const codeRef = doc(db, "bonusCodes", code);
+      const userRef = doc(db, "users", me.uid);
+      const redeemRef = doc(db, "bonusRedeems", me.uid + "_" + code);
+      const fundRef = doc(db, "adminFund", "main");
+      const cSnap = await tx.get(codeRef);
+      if (!cSnap.exists()) return { cls: "INVALID" };
+      const c = cSnap.data();
+      const lim = Number(c.usageLimit || 0), used = Number(c.usedCount || 0);
+      if (c.deleted === true || c.active !== true || (lim > 0 && used >= lim)) return { cls: "EXPIRED" };
+      const uSnap = await tx.get(userRef);
+      const u = uSnap.exists() ? uSnap.data() : {};
+      if (u.walletFrozen === true) return { cls: "FROZEN" };
+      if (u.bonusUsed && u.bonusUsed[code] === true) return { cls: "USED" };
+      const rSnap = await tx.get(redeemRef);
+      if (rSnap.exists()) return { cls: "USED" };
+      const amount = Number(c.amountPaise) || 0;
+      if (amount <= 0) return { cls: "EXPIRED" };
+      const fSnap = await tx.get(fundRef);
+      const fundBal = fSnap.exists() ? (Number(fSnap.data().balancePaise) || 0) : 0;
+      if (fundBal < amount) return { cls: "PAUSED" };
+      const bonusUsed = Object.assign({}, u.bonusUsed || {});
+      bonusUsed[code] = true;
+      tx.set(redeemRef, { uid: me.uid, code, amountPaise: amount, createdAt: serverTimestamp() });
+      tx.update(codeRef, { usedCount: used + 1 });
+      tx.update(userRef, { walletBalancePaise: (Number(u.walletBalancePaise) || 0) + amount, bonusUsed });
+      tx.update(fundRef, {
+        balancePaise: fundBal - amount,
+        totalGivenPaise: (fSnap.exists() ? (Number(fSnap.data().totalGivenPaise) || 0) : 0) + amount
+      });
+      const txnRef = doc(collection(db, "adminFundTxns"));
+      tx.set(txnRef, { type: "bonus", amountPaise: -amount, uid: me.uid, code, createdAt: serverTimestamp() });
+      return { cls: "OK", amount };
+    });
+    if (out.cls === "OK") {
+      m.textContent = "🎉 " + rupees(out.amount) + " wallet me jud gaya!";
+      m.className = "msg ok";
+      $("bonusCode").value = "";
+      profile = await loadProfile(me.uid);
+      setBalance(); loadHistory();
+    } else if (out.cls === "INVALID") { m.textContent = "Invalid bonus code"; m.className = "msg err"; }
+    else if (out.cls === "EXPIRED") { m.textContent = "This bonus code has expired"; m.className = "msg err"; }
+    else if (out.cls === "USED") { m.textContent = "You have already used this code"; m.className = "msg err"; }
+    else if (out.cls === "FROZEN") { m.textContent = "❄️ Tumhara wallet freeze hai."; m.className = "msg err"; }
+    else { m.textContent = "⏸ Abhi rewards band hain, jald wapas aayenge"; m.className = "msg err"; }
+  } catch (e) {
+    m.textContent = "Redeem nahi ho paya. Internet check karke dobara try karo.";
+    m.className = "msg err";
+  }
+  busy = false; $("redeemBtn").disabled = false;
+});
+$("bonusCode").addEventListener("keydown", e => { if (e.key === "Enter") $("redeemBtn").click(); });
+
+onAuthStateChanged(auth, async user => {
+  me = user;
+  $("guestCard").classList.toggle("hidden", !!user);
+  $("mainBox").classList.toggle("hidden", !user);
+  if (!user) return;
+  cfg = await loadConfig();
+  profile = await loadProfile(user.uid);
+  setBalance();
+  $("pausedCard").classList.toggle("hidden", cfg.earnPaused !== true);
+  const frozen = !!(profile && profile.walletFrozen === true);
+  $("frozenCard").classList.toggle("hidden", !frozen);
+  if (frozen && profile.walletFreezeReason) $("frozenReason").textContent = profile.walletFreezeReason;
+  loadHistory();
+});
+</script>
+</body>
+</html>

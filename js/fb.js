@@ -14,7 +14,7 @@ import {
 import {
   getFirestore, doc, getDoc, setDoc, addDoc, collection,
   query, where, orderBy, limit, getDocs, serverTimestamp,
-  writeBatch, updateDoc, increment
+  writeBatch, updateDoc, increment, runTransaction
 } from "../vendor/firebase-firestore.js";
 import { getStorage, ref, uploadBytes } from "../vendor/firebase-storage.js";
 import { firebaseConfig } from "./firebase-config.js";
@@ -30,7 +30,7 @@ export {
   sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup,
   updateProfile, doc, getDoc, setDoc, addDoc, collection, query,
   where, orderBy, limit, getDocs, serverTimestamp, ref, uploadBytes,
-  writeBatch, updateDoc, increment
+  writeBatch, updateDoc, increment, runTransaction
 };
 
 export const PLAN_KEYS = ["1m", "3m", "6m", "1y"];
