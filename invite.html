@@ -153,6 +153,14 @@ function extendedUntil(existingMs, days, now) {
 async function ensureProfile(user, profile) {
   deviceHash = webDeviceHash();
   const patch = { lastDeviceHash: deviceHash, lastSeenAt: serverTimestamp() };
+  // Website-created accounts ke users doc mein createdAt hota hi nahi
+  // (touchProfile use nahi likhta) — Auth metadata wali asal creation
+  // date se bhar do, warna age check (REF-05) naye account ko bhi
+  // galat reject kar deta hai. App yahi kaam pehle se karta hai.
+  if (!(profile && profile.createdAt) && user.metadata && user.metadata.creationTime) {
+    const ct = Date.parse(user.metadata.creationTime);
+    if (ct) patch.createdAt = new Date(ct);
+  }
   const ip = await myIp();
   if (ip) patch.lastIp = ip;
   let code = profile && profile.referCode ? String(profile.referCode) : "";
@@ -213,7 +221,10 @@ async function redeem(rawCode) {
     const mySnap = await getDoc(doc(db, "users", me.uid));
     const myData = mySnap.exists() ? mySnap.data() : {};
     if (myData.referralRedeemed === true) return fail("REF-02");
-    const created = tsMillis(myData.createdAt);
+    let created = tsMillis(myData.createdAt);
+    if (!created && me.metadata && me.metadata.creationTime) {
+      created = Date.parse(me.metadata.creationTime) || 0;
+    }
     if (!created || Date.now() - created > 7 * 86400000) return fail("REF-05");
     const idxSnap = await getDoc(doc(db, "referCodes", code));
     if (!idxSnap.exists()) return fail("REF-01");
