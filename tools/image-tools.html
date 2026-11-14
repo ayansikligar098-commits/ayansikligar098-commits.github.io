@@ -327,8 +327,8 @@ document.getElementById('ltqrBack').addEventListener('click', function(){
     <h2>Passport Size Photo Maker</h2>
     <p class="hint">One photo in — a print-ready sheet of passport-size copies (35 × 45 mm) out.
       Drag the green box over the face. The crop box is always the upright 35 × 45 passport shape —
-      a wide photo is centre-cropped into it. The Paper setting below decides how the copies sit
-      on the sheet (on Landscape paper they turn sideways on the sheet, studio style).</p>
+      a wide photo is centre-cropped into it. The Paper setting below only decides the sheet's
+      shape — the copies stay upright 35 × 45 on the sheet in both orientations.</p>
     <label>Photo</label>
     <input type="file" accept="image/*" data-pick>
     <div class="fileinfo"></div>
@@ -359,7 +359,7 @@ document.getElementById('ltqrBack').addEventListener('click', function(){
       <option value="portrait" selected>Paper: Portrait — upright sheet</option>
       <option value="landscape">Paper: Landscape — wide sheet</option>
     </select>
-    <p class="note">Your crop always stays 35 × 45 upright — this setting is only about the paper. On Landscape paper the sheet turns wide and each photo turns sideways on the sheet to fit it, like studio sheets.</p>
+    <p class="note">Your crop always stays 35 × 45 upright — this setting is only about the paper. On Landscape paper the sheet turns wide and the copies arrange across it; every photo stays upright.</p>
     <label style="font-weight:500"><input type="checkbox" id="pp-border" checked> Thin cutting border around each copy</label>
     <div class="previewwrap"><div class="cropwrap" id="pp-wrap" style="display:none">
       <img id="pp-img" alt="Photo for passport sheet">
@@ -522,16 +522,18 @@ Core.passportLayout = function(o){
   var landscape = o.orientation === 'landscape';
   var gapMm = (o.gapMm == null ? 3 : o.gapMm);
   var marginMm = (o.marginMm == null ? 6 : o.marginMm);
-  /* The PAPER orientation decides how photos sit ON THE SHEET (studio
-     style). Portrait paper: upright sheet, upright 35 x 45 slots, photos
-     upright. Landscape paper: the sheet dims swap (wide sheet) AND the
-     slots turn 45 x 35 — each photo is drawn rotated 90 degrees into its
-     slot on the sheet (see drawSheetPhoto). The CROP is never affected:
-     the cropped photo itself is always the upright 35 x 45 image. */
+  /* The PAPER orientation decides only the SHEET's shape (Ayan FINAL,
+     2026-11-13 20:26 — the studio sheet photo he approved): Portrait paper
+     = upright sheet; Landscape paper = wide sheet (dims swap). Photos are
+     ALWAYS upright 35 x 45 on the sheet in BOTH orientations — never
+     rotated, never upside down. Only the grid (columns x rows) changes
+     with the paper: e.g. 4x6in Landscape + 8 copies = 4 columns x 2 rows
+     of upright photos. The CROP is never affected either: the cropped
+     photo itself is always the upright 35 x 45 image. */
   var sheetW = Core.mmToPx(landscape ? o.sheetHmm : o.sheetWmm, dpi),
       sheetH = Core.mmToPx(landscape ? o.sheetWmm : o.sheetHmm, dpi);
-  var fullW = Core.mmToPx(landscape ? Core.PASSPORT_H_MM : Core.PASSPORT_W_MM, dpi),
-      fullH = Core.mmToPx(landscape ? Core.PASSPORT_W_MM : Core.PASSPORT_H_MM, dpi);
+  var fullW = Core.mmToPx(Core.PASSPORT_W_MM, dpi),
+      fullH = Core.mmToPx(Core.PASSPORT_H_MM, dpi);
   var gap = Core.mmToPx(gapMm, dpi), margin = Core.mmToPx(marginMm, dpi);
   var n = Math.max(1, Math.floor(o.copies) || 1);
   /* AUTO-FIT (Ayan 19:41): the user picks only the paper and the count.
@@ -577,29 +579,18 @@ Core.passportLayout = function(o){
   return { sheetW: sheetW, sheetH: sheetH, cellW: cellW, cellH: cellH,
            fullW: fullW, fullH: fullH, shrunk: cellW < fullW - 1,
            cols: cols, rows: rows, capacity: capacity, cells: cells,
-           rotated: landscape,
+           rotated: false,
            orientation: landscape ? 'landscape' : 'portrait' };
 };
 /* Draws one cropped passport photo into a sheet cell with CONTAIN-fit: the
    whole photo is always visible, centred in the slot, aspect untouched —
-   never cropped, never stretched. The photo canvas is always the upright
-   35 x 45 crop; on Landscape paper (rotated=true) it is turned 90 degrees
-   so it fits the wide 45 x 35 slot, exactly like studio sheets — the
-   rotation happens here, on the sheet, never at crop time. */
-Core.drawSheetPhoto = function(ctx, photo, cell, rotated){
-  if(!rotated){
-    var s = Math.min(cell.w / photo.width, cell.h / photo.height);
-    var dw = photo.width * s, dh = photo.height * s;
-    ctx.drawImage(photo, cell.x + (cell.w - dw) / 2, cell.y + (cell.h - dh) / 2, dw, dh);
-    return;
-  }
-  var s2 = Math.min(cell.w / photo.height, cell.h / photo.width);
-  var dw2 = photo.height * s2, dh2 = photo.width * s2;
-  ctx.save();
-  ctx.translate(cell.x + cell.w / 2, cell.y + cell.h / 2);
-  ctx.rotate(Math.PI / 2);
-  ctx.drawImage(photo, -dh2 / 2, -dw2 / 2, dh2, dw2);
-  ctx.restore();
+   never cropped, never stretched, NEVER rotated (Ayan FINAL 2026-11-13
+   20:26: photos stay upright on the sheet in both paper orientations).
+   The 4th argument is kept for call compatibility and ignored. */
+Core.drawSheetPhoto = function(ctx, photo, cell){
+  var s = Math.min(cell.w / photo.width, cell.h / photo.height);
+  var dw = photo.width * s, dh = photo.height * s;
+  ctx.drawImage(photo, cell.x + (cell.w - dw) / 2, cell.y + (cell.h - dh) / 2, dw, dh);
 };
 
 /* ----- On-device background removal (Note 8.3, free — no API) ----- */
