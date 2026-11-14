@@ -1,130 +1,152 @@
 /* ============================================================
-   Link To QR — SaaS design layer (2026-11-14)
-   Presentation only: loads AFTER site.css on every page.
-   No layout contracts change — same classes, same IDs, same JS.
-   Palette stays BLUE-first (owner's favourite colour) on the
-   existing dark surfaces, with light, airy card accents borrowed
-   from modern SaaS dashboards.
+   Link To QR — Premium Light theme (Ayan ke mockup design jaisa)
+   Halka lavender-white background, safed cards, violet-blue
+   gradient. Ye file site.css/index ke BAAD load hoti hai —
+   sirf rang/roop badalta hai, koi kaam (JS/ID/API) nahi chhedta.
    ============================================================ */
 :root{
-  --saas-blue:#3B82F6; --saas-blue-d:#2563EB; --saas-sky:#38BDF8;
-  --saas-grad:linear-gradient(120deg,#1D4ED8 0%,#2563EB 45%,#0EA5E9 100%);
-  --saas-ring:0 0 0 3px rgba(59,130,246,.35);
-  --saas-shadow:0 18px 40px rgba(2,8,30,.45);
-  --saas-radius:18px;
+  --bg:#F4F2FF; --surface:#FFFFFF; --surface2:#EDEBFF; --surface-2:#EDEBFF;
+  --line:#E3E0FA; --text:#1B1440; --muted:#6E6A92;
+  --primary:#5B2BE0; --primary-dark:#4C1D95; --primary-light:#E7E3FF;
+  --headband:#FFFFFF; --dot:rgba(91,43,224,.07);
+  --shadow:0 10px 30px rgba(76,29,149,.10);
+  --grad:linear-gradient(135deg,#6D28D9,#2563EB);
 }
-body.site{font-family:"Manrope",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
-  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
-h1,h2,h3,.brand{font-family:"Sora","Manrope",system-ui,sans-serif}
-
-/* ---------- shared top header (header.js) ---------- */
-.site-header{padding:12px 18px;background:rgba(10,14,24,.88);
-  border-bottom:1px solid rgba(96,140,220,.22);backdrop-filter:blur(12px);
-  box-shadow:0 8px 28px rgba(0,0,0,.35)}
-.site-header .brand{font-size:19px;gap:11px}
-.site-header .brand .mark{width:36px;height:36px;border-radius:11px;color:#fff;
-  background:var(--saas-grad);box-shadow:0 8px 18px rgba(37,99,235,.45);font-size:18px}
-.site-nav{gap:6px}
-.site-nav a{padding:8px 13px;border-radius:999px;font-weight:600;transition:all .18s ease}
-.site-nav a:hover{background:rgba(59,130,246,.16);color:#fff}
-.site-nav a.on{background:var(--saas-grad);color:#fff;box-shadow:0 6px 16px rgba(37,99,235,.35)}
-.prem-badge{box-shadow:0 4px 12px rgba(255,158,61,.35)}
-
-/* ---------- buttons & inputs ---------- */
-.btn{background:var(--saas-grad);color:#fff;border-radius:12px;
-  box-shadow:0 10px 22px rgba(37,99,235,.30);transition:transform .15s ease,box-shadow .15s ease,filter .15s ease}
-.btn:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 14px 26px rgba(37,99,235,.38)}
-.btn:active{transform:translateY(0) scale(.98)}
-.btn.ghost{background:rgba(59,130,246,.08);box-shadow:none;border:1px solid rgba(96,140,220,.35)}
-.btn.ghost:hover{border-color:var(--saas-blue);color:#fff;background:rgba(59,130,246,.16)}
-.btn:focus-visible,.site-nav a:focus-visible,input:focus-visible,button:focus-visible,a:focus-visible{
-  outline:none;box-shadow:var(--saas-ring)}
-input[type=text],input[type=email],input[type=password],input[type=file],select,textarea{
-  border-radius:12px;transition:border-color .15s ease,box-shadow .15s ease}
-input:focus,select:focus,textarea:focus{border-color:var(--saas-blue);box-shadow:var(--saas-ring)}
-
-/* ---------- cards ---------- */
-.card{border-radius:var(--saas-radius);border-color:rgba(96,140,220,.20);
-  box-shadow:0 10px 30px rgba(0,0,0,.28);animation:saasUp .45s ease both}
-.card h2{letter-spacing:.2px}
-@keyframes saasUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-
-/* ---------- premium pricing ---------- */
-.plans{gap:14px}
-.plan{border-radius:18px;border:1px solid rgba(96,140,220,.25);padding:20px 16px;
-  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;position:relative;background:var(--surface2)}
-.plan:hover{transform:translateY(-4px);box-shadow:var(--saas-shadow);border-color:rgba(96,140,220,.5)}
-.plan.sel{border-color:var(--saas-blue);box-shadow:0 0 0 2px var(--saas-blue),var(--saas-shadow);
-  background:linear-gradient(180deg,rgba(59,130,246,.14),var(--surface2) 55%)}
-.plan .pr{font-family:"Sora",sans-serif;font-size:30px;font-weight:800;color:#fff}
-.qty-pill{border-radius:999px;min-width:42px;justify-content:center}
-
-/* ---------- homepage: brand band -> hero panel ---------- */
-.header{border-radius:22px;padding:22px 22px;position:relative;overflow:hidden;
-  box-shadow:var(--saas-shadow);border:1px solid rgba(120,170,255,.25)}
-.header:after{content:"";position:absolute;inset:auto -60px -90px auto;width:260px;height:260px;border-radius:50%;
-  background:radial-gradient(circle,rgba(56,189,248,.35),transparent 65%);pointer-events:none}
-.header .logo img{border-radius:14px;box-shadow:0 10px 22px rgba(0,0,0,.4)}
-.badge{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);backdrop-filter:blur(4px)}
-.hist-btn{border-radius:999px;transition:all .15s ease}
-.hist-btn:hover{background:rgba(255,255,255,.22);transform:translateY(-1px)}
-
-/* ---------- hero (new, index) ---------- */
-.saas-hero{margin:20px 0 6px;text-align:left;animation:saasUp .5s ease both}
-.saas-hero h2{font-size:clamp(26px,5.4vw,40px);line-height:1.12;margin:0 0 10px;font-weight:800;letter-spacing:.2px}
-.saas-hero h2 .grad{background:linear-gradient(90deg,#60A5FA,#38BDF8,#22D3EE);
-  -webkit-background-clip:text;background-clip:text;color:transparent}
-.saas-hero p{color:var(--muted);font-size:15.5px;line-height:1.6;margin:0 0 18px;max-width:640px}
-.saas-search{display:flex;align-items:center;gap:10px;background:var(--surface);
-  border:1px solid rgba(96,140,220,.35);border-radius:16px;padding:6px 6px 6px 16px;
-  box-shadow:0 14px 34px rgba(0,0,0,.35);max-width:640px}
-.saas-search:focus-within{border-color:var(--saas-blue);box-shadow:var(--saas-ring)}
-.saas-search input{flex:1;background:transparent;border:0;box-shadow:none;font-size:16px;color:var(--text);padding:10px 0}
-.saas-search input:focus{box-shadow:none;border:0}
-.saas-search .go{background:var(--saas-grad);color:#fff;border:0;border-radius:12px;
-  padding:11px 18px;font-weight:800;cursor:pointer;font-size:14px}
-.chip-row{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}
-.chip{border:1px solid rgba(96,140,220,.35);background:rgba(59,130,246,.07);color:var(--text);
-  border-radius:999px;padding:8px 15px;font-size:13.5px;font-weight:700;cursor:pointer;transition:all .15s ease}
-.chip:hover{border-color:var(--saas-blue);transform:translateY(-1px)}
-.chip.on{background:var(--saas-grad);color:#fff;border-color:transparent;box-shadow:0 8px 18px rgba(37,99,235,.35)}
-.saas-noresult{display:none;color:var(--muted);font-size:14px;margin:10px 2px}
-
-/* ---------- tool tabs as SaaS cards ---------- */
-.tabs{gap:12px}
-.tab{border-radius:18px;border:1px solid rgba(96,140,220,.22);background:var(--surface);
-  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;box-shadow:0 8px 20px rgba(0,0,0,.25)}
-.tab:hover{transform:translateY(-4px);box-shadow:var(--saas-shadow);border-color:rgba(96,140,220,.55)}
-.tab .tic{transition:transform .18s ease}
-.tab:hover .tic{transform:scale(1.12)}
-.tab.on{border-color:var(--acc,var(--saas-blue));box-shadow:0 0 0 2px var(--acc,var(--saas-blue)),var(--saas-shadow)}
-.pc-tools a{border-radius:16px;transition:transform .18s ease,box-shadow .18s ease}
-.pc-tools a:hover{transform:translateY(-3px);box-shadow:var(--saas-shadow)}
-.earn-card{transition:transform .18s ease,box-shadow .18s ease}
-.earn-card:hover{transform:translateY(-3px);box-shadow:0 16px 30px rgba(10,15,25,.4)}
-
-/* ---------- bottom nav ---------- */
-.bnav{backdrop-filter:blur(12px);background:rgba(10,14,24,.9);border-top:1px solid rgba(96,140,220,.22)}
-
-/* ---------- All Tools page cards ---------- */
-.tool-card{border-radius:18px;border:1px solid rgba(96,140,220,.22);
-  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
-  box-shadow:0 8px 20px rgba(0,0,0,.22);animation:saasUp .45s ease both}
-.tool-card:hover{transform:translateY(-4px);box-shadow:var(--saas-shadow);border-color:rgba(96,140,220,.55)}
-.tools-search{margin:14px 0 6px;max-width:640px}
-
-/* ---------- loading / empty states ---------- */
-.skel{border-radius:12px;background:linear-gradient(100deg,var(--surface2) 40%,rgba(255,255,255,.06) 50%,var(--surface2) 60%);
-  background-size:200% 100%;animation:saasShimmer 1.2s infinite}
-@keyframes saasShimmer{to{background-position:-200% 0}}
-.empty-note{border:1.5px dashed rgba(96,140,220,.4);border-radius:16px;padding:22px;text-align:center;color:var(--muted)}
-
-/* ---------- motion safety ---------- */
-@media (prefers-reduced-motion:reduce){
-  *,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+html{scroll-behavior:smooth}
+body{
+  background:
+    radial-gradient(700px 320px at 88% -80px, rgba(124,58,237,.14), transparent 60%),
+    radial-gradient(560px 300px at -100px 20%, rgba(37,99,235,.10), transparent 60%),
+    var(--bg);
+  color:var(--text);
 }
-@media (max-width:560px){
-  .saas-hero h2{font-size:27px}
-  .site-header{padding:10px 12px}
-  .header{padding:18px 16px}
+::selection{background:#C4B5FD}
+
+/* ---------- Header / Sidebar shell ---------- */
+.site-header{
+  background:rgba(255,255,255,.92);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.site-header .brand{color:var(--text);font-weight:800;letter-spacing:-.01em}
+.site-header .brand .mark{
+  background:var(--grad);color:#fff;border-radius:10px;
+  box-shadow:0 6px 16px rgba(109,40,217,.35);
+}
+.site-nav a{color:var(--muted);border-radius:11px;font-weight:600;transition:background .18s ease,color .18s ease}
+.site-nav a:hover{background:var(--surface2);color:var(--text)}
+.site-nav a.on{background:var(--primary-light);color:var(--primary-dark)}
+.acct-chip{color:var(--muted)}
+@media (min-width:1024px){
+  .site-header{
+    position:fixed;left:0;top:0;bottom:0;width:238px;z-index:60;
+    flex-direction:column;align-items:stretch;justify-content:flex-start;
+    gap:6px;padding:20px 16px;background:#FFFFFF;
+    border-right:1px solid var(--line);border-bottom:none;
+  }
+  .site-header .brand{font-size:19px;padding:2px 8px 12px}
+  .site-nav{flex-direction:column;align-items:stretch;gap:4px;margin-top:4px}
+  .site-nav a{padding:11px 13px;font-size:14.5px}
+  .site-head-right{margin-top:auto;flex-direction:column;align-items:stretch;gap:10px}
+  body{padding-left:238px}
+}
+
+/* ---------- Buttons / inputs / cards ---------- */
+.btn{
+  background:var(--grad);color:#fff;border:none;border-radius:13px;
+  box-shadow:0 8px 20px rgba(109,40,217,.28);
+  transition:transform .16s ease, box-shadow .16s ease, filter .16s ease;
+}
+.btn:hover{transform:translateY(-1px);filter:brightness(1.05);box-shadow:0 12px 26px rgba(109,40,217,.32)}
+.btn:active{transform:translateY(0)}
+.btn.ghost,.btn.secondary{
+  background:#fff;color:var(--primary-dark);border:1px solid var(--line);box-shadow:none;
+}
+.input, input[type="text"], input[type="email"], input[type="password"],
+input[type="number"], input[type="tel"], select, textarea{
+  background:#F8F7FF;border:1px solid #DCD6FA;color:var(--text);border-radius:12px;
+}
+.input:focus, input:focus, select:focus, textarea:focus{
+  border-color:#7C3AED;background:#fff;outline:none;
+  box-shadow:0 0 0 3px rgba(124,58,237,.18);
+}
+.card{
+  background:#fff;border:1px solid var(--line);border-radius:20px;
+  box-shadow:0 10px 30px rgba(76,29,149,.07);
+}
+.mut, .hint, small{color:var(--muted)}
+
+/* ---------- Premium pricing ---------- */
+.plan{
+  background:#fff;border:1.5px solid var(--line);border-radius:20px;
+  transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.plan:hover{transform:translateY(-3px);box-shadow:0 16px 34px rgba(76,29,149,.12)}
+.plan.sel{border-color:#7C3AED;box-shadow:0 0 0 3px rgba(124,58,237,.20),0 16px 34px rgba(76,29,149,.14)}
+.plan .tag{
+  background:var(--grad);color:#fff;border-radius:999px;
+  font-weight:700;letter-spacing:.02em;
+}
+.prem-hero{
+  background:linear-gradient(120deg,#4C1D95,#6D28D9 48%,#2563EB);
+  border-radius:24px;padding:30px 24px 26px;text-align:center;color:#fff;
+  box-shadow:0 18px 38px rgba(76,29,149,.30);margin:14px 0 18px;
+}
+.prem-hero .prem-crown{font-size:34px;line-height:1}
+.prem-hero h2{margin:8px 0 6px;font-size:27px;letter-spacing:-.01em;color:#fff}
+.prem-hero p{margin:0 auto;max-width:520px;color:#DDD6FE;font-size:14.5px;line-height:1.55}
+.prem-perks{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px}
+.prem-perks span{
+  background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);
+  padding:7px 12px;border-radius:999px;font-size:12.5px;font-weight:600;color:#fff;
+}
+
+/* ---------- Homepage hero + search (index) ---------- */
+.saas-hero{
+  background:#fff;border:1px solid var(--line);border-radius:24px;
+  box-shadow:0 14px 34px rgba(76,29,149,.09);
+}
+.saas-hero h2{color:var(--text)}
+.saas-hero p{color:var(--muted)}
+.saas-search input{background:#F8F7FF;border-color:#DCD6FA;color:var(--text)}
+.s-chip{background:#fff;border:1px solid var(--line);color:var(--muted)}
+.s-chip.on{background:var(--grad);color:#fff;border-color:transparent}
+.header{
+  background:linear-gradient(120deg,#4C1D95,#6D28D9 48%,#2563EB);
+  border:none;border-radius:22px;padding:22px 20px;color:#fff;
+  box-shadow:0 16px 34px rgba(76,29,149,.26);
+}
+.header h1{color:#fff}
+.header p{color:#DDD6FE}
+.header .badge{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.28);color:#fff}
+.tab{border-radius:16px;box-shadow:0 4px 14px rgba(76,29,149,.06);transition:transform .16s ease, box-shadow .16s ease}
+.tab:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(76,29,149,.12)}
+.tab.active{background:var(--grad);border-color:transparent;color:#fff}
+.tab.active small{color:#DDD6FE}
+.bnav{background:rgba(255,255,255,.94);border-top:1px solid var(--line);box-shadow:0 -6px 24px rgba(76,29,149,.07)}
+.bnav a{color:var(--muted)}
+.bnav a.on{color:#6D28D9}
+
+/* ---------- Tools hub cards ---------- */
+.tool-card{
+  background:#fff;border:1px solid var(--line);border-radius:20px;
+  box-shadow:0 8px 22px rgba(76,29,149,.06);
+  transition:transform .18s ease, box-shadow .18s ease;
+}
+.tool-card:hover{transform:translateY(-3px);box-shadow:0 16px 32px rgba(76,29,149,.13)}
+
+/* ---------- States ---------- */
+.empty{
+  border:1.5px dashed #C9C2F5;border-radius:16px;padding:22px;text-align:center;
+  color:var(--muted);background:#FBFAFF;
+}
+.shimmer{
+  background:linear-gradient(100deg,#EDEBFF 40%,#F7F5FF 50%,#EDEBFF 60%);
+  background-size:200% 100%;animation:ltqrShimmer 1.3s infinite;border-radius:12px;
+}
+@keyframes ltqrShimmer{to{background-position:-200% 0}}
+:focus-visible{outline:2px solid #7C3AED;outline-offset:2px}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
+  html{scroll-behavior:auto}
 }
