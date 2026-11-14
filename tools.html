@@ -22,6 +22,13 @@
   .hub-hero h1{margin:0;font-size:23px;letter-spacing:.2px;color:var(--text)}
   .hub-hero p{margin:4px 0 0;color:#BFDBFE;font-size:13.5px;line-height:1.45}
   .hub-main{max-width:860px;margin:0 auto;padding:16px 14px 60px}
+  /* PC: chauda 2-column grid — chaaro tool card pehli screen par dikhne
+     chahiye, neeche lambi list nahi (Ayan ka order, 2026-11-14). */
+  @media(min-width:900px){
+    .hub-hero{max-width:1140px;margin:14px auto 0}
+    .hub-main{max-width:1140px;display:grid;grid-template-columns:1fr 1fr;gap:13px;padding-top:14px}
+    .tool-card{margin-bottom:0}
+  }
   .tool-card{display:flex;align-items:flex-start;gap:14px;text-decoration:none;color:var(--text);
     background:linear-gradient(180deg,#16202F,#121A28);
     border:1px solid var(--line);border-radius:19px;padding:17px 16px;margin-bottom:13px;

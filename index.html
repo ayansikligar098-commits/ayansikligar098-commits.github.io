@@ -2430,11 +2430,26 @@ body{font-family:Manrope,system-ui,sans-serif;background-image:radial-gradient(v
 .tab:active{transform:scale(.97)}
 .tab:focus-visible,.btn:focus-visible{outline:3px solid color-mix(in srgb, var(--acc) 55%, transparent);outline-offset:2px}
 @media(min-width:920px){
-  .wrap{display:grid;grid-template-columns:118px minmax(0,1fr);column-gap:18px}
-  .header{grid-column:1/-1}
-  .tabs{display:flex;flex-direction:column;position:sticky;top:16px;align-self:start;grid-column:1;grid-row:2/span 24;margin:0}
-  .tab{min-height:94px;padding-top:14px}
-  .panel{grid-column:2;min-width:0}
+  /* PC/desktop: tools ek chaudi line(s) mein failen — purana 118px wala
+     side-dock hata diya gaya tha kyunki PC par saare feature neeche ek ke
+     neeche ek ja rahe the (Ayan ki shikayat, 2026-11-14). */
+  .tabs{grid-template-columns:repeat(5,1fr);margin-bottom:10px}
+  /* PC par kholte hi sab feature pehli screen par dikhne chahiye —
+     upar ka hissa compact rakha gaya hai (Ayan ka order, 2026-11-14). */
+  .wrap{padding-top:10px}
+  .header{margin-bottom:10px;padding:10px 14px}
+}
+.pc-tools{display:none}
+@media(min-width:920px){
+  .pc-tools{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:0 0 10px}
+  .pc-tools a{display:flex;align-items:center;gap:10px;padding:11px 14px;border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--text);text-decoration:none;font-family:Sora,Manrope,sans-serif;font-weight:700;font-size:14px}
+  .pc-tools .pi{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:19px;background:var(--surface2);flex:none}
+  .pc-tools a small{display:block;font-family:Manrope,sans-serif;font-weight:600;font-size:11px;color:var(--muted);margin-top:1px}
+}
+@media(min-width:1240px){
+  .tabs{grid-template-columns:repeat(10,1fr)}
+  .tab{min-height:96px;padding:12px 2px 10px}
+  .tlabel{font-size:10.5px}
 }
 /* --- workspace --- */
 .panel{--acc:#2563EB}
@@ -2553,6 +2568,14 @@ label{font-size:12.5px}
     <button class="tab" data-tab="contact" style="--acc:#0369A1"><span class="tic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="tlabel">Contact</span><span class="ttag">VCARD</span></button>
     <button class="tab" data-tab="barcode" style="--acc:#1F3A5F"><span class="tic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 5v14M7.5 5v14M11 5v14M13.5 5v14M17 5v14M20 5v14"/></svg></span><span class="tlabel">Barcode</span><span class="ttag">CODE</span></button>
   </nav>
+
+  <!-- PC-only strip: the 4 heavy tools, visible on the first screen on desktop -->
+  <div class="pc-tools">
+    <a href="tools/pdf-tools.html"><span class="pi">📄</span><span>PDF Tools<small>Merge, split, convert</small></span></a>
+    <a href="tools/image-tools.html"><span class="pi">🖼️</span><span>Photo Tools<small>Passport photo, resize</small></span></a>
+    <a href="tools/scanner.html"><span class="pi">📷</span><span>Scanner<small>Documents &amp; QR scan</small></span></a>
+    <a href="tools/text-edit.html"><span class="pi">✏️</span><span>Edit Text<small>PDF &amp; photo text edit</small></span></a>
+  </div>
 
   <!-- HOME VIEW: the default state on open — no tool is pre-selected. -->
   <style>
