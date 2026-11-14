@@ -2,7 +2,7 @@
    Matches the app palette: bg #0F1113, surface #171A1D, primary #2FBF8F. */
 :root{
   --bg:#0F1113; --surface:#171A1D; --surface2:#1E2226; --line:#262B30;
-  --text:#EDF1F0; --muted:#9AA5A0; --primary:#2FBF8F; --primary-d:#25a579;
+  --text:#EDF1F0; --muted:#9AA5A0; --primary:#3B82F6; --primary-d:#2563EB;
   --danger:#F08A8A; --warn:#FFC95C; --ok:#7BD88F; --radius:14px;
 }
 *{box-sizing:border-box}
@@ -43,11 +43,15 @@ a{color:var(--primary)}
 .tabs{display:flex;gap:8px;margin:6px 0 4px}
 .tabs button{flex:1;padding:12px;border-radius:11px;border:1px solid var(--line);
   background:var(--surface2);color:var(--muted);font-size:15px;font-weight:700;cursor:pointer}
-.tabs button.on{background:var(--primary);color:#06251b;border-color:var(--primary)}
-label.f{display:block;font-size:13px;color:var(--muted);margin:14px 0 6px}
+.tabs button.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+label.f{display:block;font-size:13px;color:var(--text);font-weight:600;margin:14px 0 6px}
 input[type=text],input[type=email],input[type=password],input[type=file]{
   width:100%;padding:12px 13px;border-radius:11px;border:1px solid var(--line);
-  background:var(--surface2);color:var(--text);font-size:15px;outline:none}
+  background:var(--surface2);color:var(--text);font-size:15px;font-weight:500;outline:none;caret-color:var(--text)}
+/* Placeholder aur type kiya hua text saaf dikhe (Ayan ki shikayat, 2026-11-14):
+   browser ka default placeholder dark dabbe mein bahut fika padta tha. */
+input::placeholder{color:#B8C2CE;opacity:1}
+input:-webkit-autofill{-webkit-text-fill-color:var(--text);caret-color:var(--text)}
 input:focus{border-color:var(--primary)}
 .msg{font-size:13.5px;margin-top:12px;min-height:18px;line-height:1.5}
 .msg.err{color:var(--danger)} .msg.ok{color:var(--ok)} .msg.warn{color:var(--warn)}
