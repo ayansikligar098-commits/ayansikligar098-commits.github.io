@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — QR Master</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/site.css">
+<link rel="stylesheet" href="/css/saas.css">
+</head>
+<body class="site">
+<button type="button" id="ltqrBack" style="display:inline-flex;align-items:center;gap:6px;margin:12px 14px 0;padding:8px 18px;border:1px solid #263449;border-radius:999px;background:#121A28;color:#EDF1F0;font:600 14px system-ui,sans-serif;cursor:pointer">← Back</button>
+<script>
+document.getElementById('ltqrBack').addEventListener('click', function(){
+  try { if (window.history.length > 1) { window.history.back(); return; } } catch(e){}
+  try { window.location.href = '/'; } catch(e){}
+});
+</script>
+<div id="siteHeader"></div>
+<div class="wrap doc">
+  <h1>Privacy Policy</h1>
+  <p class="muted">QR Master — Android app and this website. Last updated: 16 November 2026.</p>
+
+  <h2>What QR Master is</h2>
+  <p>QR Master is a tools app and website (QR makers and scanner, document scanner, PDF and photo tools) with optional user accounts, an optional paid Premium plan, and an optional rewards wallet. The same account works in the app and on this website. Most tools work without an account; wallet, Premium and reward features need a free account.</p>
+
+  <h2>Your files stay on your device</h2>
+  <p>The PDF, photo and scanner tools work <b>on your own phone/computer</b>. The files you open in a tool are <b>not uploaded to any server</b> and we cannot see them. A file leaves your device only if you yourself download, share or send it somewhere.</p>
+
+  <h2>Account information</h2>
+  <p>If you create an account, we store your name and email address so you can sign in and use account features such as Wallet, Premium and Support, using Google Firebase (Authentication and Cloud Firestore). Passwords are handled by Firebase Authentication — we never see or store your plain password. If you sign in with Google, Google shares your name and email with us for the account.</p>
+
+  <h2>Wallet, Premium and rewards</h2>
+  <p>Your wallet balance, premium status, spin and bonus history, task rewards and withdrawal requests are stored in our secure database (Google Cloud Firestore) so your balance and history stay correct across the app. Premium is paid by you in your own UPI app; we receive only the UTR number and the screenshot you choose to submit for verification. We never receive your bank or card details. Rewards are promotional and are credited only to the in-app wallet. Withdrawals are available from ₹10 and are paid after review.</p>
+
+  <h2>Camera and on-device processing</h2>
+  <p>The camera is used only for scanning QR codes and documents. Document scanning, text recognition (OCR), face detection and photo processing run on your device. Scanned documents — including ID cards — are stored in the app's private storage on your phone and are not uploaded to any server. A document leaves your phone only when you yourself choose to share or export it.</p>
+
+  <h2>Data stored on your phone</h2>
+  <p>Your QR history, scanned documents, app settings and sign-in session are stored locally on your device. You can delete history items and documents at any time from inside the app.</p>
+
+  <h2>Support requests</h2>
+  <p>Messages and screenshots you send through Support are stored with your ticket so our team can help you and reply inside the app.</p>
+
+  <h2>Ads</h2>
+  <p>This app contains ads provided by Google AdMob. This website may in future show ads provided by Google AdSense. These Google services may use cookies or device identifiers to show and measure ads, as described in Google's own privacy policy.</p>
+
+  <h2>What we do not do</h2>
+  <ul>
+    <li>We do not sell your personal information.</li>
+    <li>We do not share your data with advertisers. Your information is used only to run the app's features and to provide support.</li>
+    <li>We do not read the documents, photos or PDFs you process in the tools.</li>
+    <li>We do not ask for your bank, card or UPI PIN details — UPI payments happen inside your own UPI app.</li>
+  </ul>
+
+  <h2>Third-party services</h2>
+  <p>QR Master uses Google Firebase (sign-in and database), Google ML Kit (on-device scanning and text recognition) and Google AdMob (ads). Their handling of data is covered by Google's privacy policy.</p>
+
+  <h2>Data safety and deletion</h2>
+  <p>Account data is protected by Firebase security rules: only the admin can change Premium status or ban an account, and payment screenshots can be read only by the admin. If you want your account and its data deleted, contact us from the Support section in the app or at the email below and we will delete it.</p>
+
+  <h2>Children</h2>
+  <p>QR Master is a general-purpose tools service and is not directed at children under 13.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the updated version will be posted on this page with a new date.</p>
+
+  <h2>Contact</h2>
+  <p>Email: ayansikligar098@gmail.com</p>
+</div>
+</body>
+</html>
